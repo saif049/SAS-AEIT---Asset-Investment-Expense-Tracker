@@ -13,18 +13,18 @@ import {
   Building,
   Shield,
   HardDrive,
-  Code2,
   X,
   GraduationCap,
   Phone,
   Mail,
-  Smartphone,
   Download,
   CheckCircle2,
   Target,
+  Smartphone,
 } from 'lucide-react';
 import { NavigationScreen } from '../store/useAppStore';
 import { usePWAInstall } from '../hooks/usePWAInstall';
+import { DeviceInfo } from '../hooks/useDeviceScreen';
 
 interface NavigationDrawerProps {
   isOpen: boolean;
@@ -37,6 +37,8 @@ interface NavigationDrawerProps {
     incomesCount: number;
     systemLogsCount: number;
   };
+  deviceInfo?: DeviceInfo;
+  onOpenDeviceFitModal?: () => void;
 }
 
 export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
@@ -45,6 +47,8 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
   activeScreen,
   onSelectScreen,
   summary,
+  deviceInfo,
+  onOpenDeviceFitModal,
 }) => {
   const { isInstallable, isInstalled, install } = usePWAInstall();
 
@@ -89,23 +93,10 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
       badge: summary.systemLogsCount,
     },
     {
-      id: 'android_apk' as NavigationScreen,
-      label: 'Android APK & PWA Hub',
-      subtitle: 'Installable APK & Standalone Mobile',
-      icon: Smartphone,
-      highlight: true,
-    },
-    {
       id: 'backup_restore' as NavigationScreen,
       label: 'Backup & Restore',
       subtitle: 'Module 6 · Local JSON & Cloud Sync',
       icon: HardDrive,
-    },
-    {
-      id: 'expo_code_export' as NavigationScreen,
-      label: 'React Native / Expo Code',
-      subtitle: 'Expo SQLite TypeScript Source',
-      icon: Code2,
     },
   ];
 
@@ -159,6 +150,32 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
             v1.0.0
           </span>
         </div>
+
+        {/* Mobile Screen Fit Status Pill */}
+        {deviceInfo && onOpenDeviceFitModal && (
+          <button
+            type="button"
+            onClick={onOpenDeviceFitModal}
+            className="mx-3 mb-2 p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-emerald-500/40 text-left transition-all cursor-pointer flex items-center justify-between group"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-6 h-6 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0 group-hover:scale-105 transition-transform">
+                <Smartphone className="w-3.5 h-3.5" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[11px] font-bold text-slate-200 truncate">
+                  {deviceInfo.modelName}
+                </div>
+                <div className="text-[9px] text-emerald-400 font-mono">
+                  {deviceInfo.viewportWidth} × {deviceInfo.viewportHeight} px · {deviceInfo.screenCategory}
+                </div>
+              </div>
+            </div>
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-semibold shrink-0 ml-1">
+              Screen Fit
+            </span>
+          </button>
+        )}
 
         {/* In-App Direct Android Install Banner */}
         {isInstallable && !isInstalled && (

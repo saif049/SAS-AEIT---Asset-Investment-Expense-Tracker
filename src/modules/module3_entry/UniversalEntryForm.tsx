@@ -9,7 +9,7 @@
  * 5. Clean async error handling and comprehensive inline comments.
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Calendar,
   CheckCircle2,
@@ -38,8 +38,15 @@ import {
   Property,
   Investment,
   RecurrenceFrequency,
+  EnrichedExpense,
+  EnrichedIncome,
 } from '../../types/database';
 import { formatBDT, formatRawNumericInput } from '../../utils/bdtFormatter';
+import { CategorySuggestionsBar } from './CategorySuggestionsBar';
+import {
+  getCategorySmartSuggestions,
+  RecentEntrySuggestion,
+} from '../../utils/categorySuggestions';
 
 interface UniversalEntryFormProps {
   categories: Category[];
@@ -126,6 +133,88 @@ export const UniversalEntryForm: React.FC<UniversalEntryFormProps> = ({
       setSelectedSubCategoryId(null);
     }
   }, [cascadingSubCategories]);
+
+  // ----------------------------------------------------
+  // Category Intelligence & Pre-Population Engine
+  // ----------------------------------------------------
+  const [historicalExpenses, setHistoricalExpenses] = useState<EnrichedExpense[]>([]);
+  const [historicalIncomes, setHistoricalIncomes] = useState<EnrichedIncome[]>([]);
+
+  const loadHistory = useCallback(async () => {
+    try {
+      const [exps, incs] = await Promise.all([
+        sqliteService.getEnrichedExpenses(200),
+        sqliteService.getEnrichedIncomes(200),
+      ]);
+      setHistoricalExpenses(exps);
+      setHistoricalIncomes(incs);
+    } catch {
+      // non-blocking fallback
+    }
+  }, []);
+
+  useEffect(() => {
+    loadHistory();
+  }, [loadHistory]);
+
+  const selectedCategory = useMemo(() => {
+    return activeCategories.find((c) => c.id === selectedCategoryId);
+  }, [activeCategories, selectedCategoryId]);
+
+  const suggestions = useMemo(() => {
+    return getCategorySmartSuggestions({
+      categoryId: selectedCategoryId,
+      categoryName: selectedCategory ? selectedCategory.name : '',
+      entryMode,
+      expenses: historicalExpenses,
+      incomes: historicalIncomes,
+    });
+  }, [selectedCategoryId, selectedCategory, entryMode, historicalExpenses, historicalIncomes]);
+
+  const handleSelectTag = (tag: string) => {
+    if (!remarks.trim()) {
+      setRemarks(tag);
+      return;
+    }
+    const currentTags = remarks.split(/\s+/);
+    if (currentTags.includes(tag)) {
+      const filtered = currentTags.filter((t) => t !== tag).join(' ');
+      setRemarks(filtered);
+    } else {
+      setRemarks(`${remarks.trim()} ${tag}`);
+    }
+  };
+
+  const handleSelectNote = (note: string) => {
+    const hashtags = remarks.match(/#[A-Za-z0-9_]+/g);
+    if (hashtags && hashtags.length > 0) {
+      setRemarks(`${note} ${hashtags.join(' ')}`);
+    } else {
+      setRemarks(note);
+    }
+  };
+
+  const handlePrepopulateEntry = (entry: RecentEntrySuggestion) => {
+    setRawAmount(entry.amount_bdt.toString());
+    setSelectedSubCategoryId(entry.subcategory_id);
+    if (entry.remarks) {
+      setRemarks(entry.remarks);
+    }
+    if (entryMode === 'EXPENSE') {
+      if (entry.type) {
+        setExpenseType(entry.type as ExpenseType);
+      }
+      setReferenceId(entry.reference_id);
+    } else {
+      if (entry.type) {
+        setIncomeSourceType(entry.type as IncomeSourceType);
+      }
+      setReferenceId(entry.reference_id);
+    }
+    setSuccessMessage(
+      `Pre-populated from recent entry (${entry.date}): ${formatBDT(entry.amount_bdt)} [${entry.subcategory_name}]`
+    );
+  };
 
   // ----------------------------------------------------
   // Requirement 4: BDT Input Formatting Handler
@@ -243,6 +332,7 @@ export const UniversalEntryForm: React.FC<UniversalEntryFormProps> = ({
 
       // Trigger store refresh & dashboard update
       onEntrySaved();
+      await loadHistory();
     } catch (err: unknown) {
       // Requirement 5: Clean async error handling
       console.error('Data entry failed:', err);
@@ -458,6 +548,19 @@ export const UniversalEntryForm: React.FC<UniversalEntryFormProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Smart Category Tags, Common Notes & Recent Entries Pre-Population */}
+        {selectedCategory && (
+          <CategorySuggestionsBar
+            categoryName={selectedCategory.name}
+            entryMode={entryMode}
+            suggestions={suggestions}
+            currentRemarks={remarks}
+            onSelectTag={handleSelectTag}
+            onSelectNote={handleSelectNote}
+            onPrepopulateEntry={handlePrepopulateEntry}
+          />
+        )}
 
         {/* 3. Inline Date Selection & Quick Days (Requirement 4) */}
         <div className="p-4 rounded-xl bg-slate-950/70 border border-slate-800">

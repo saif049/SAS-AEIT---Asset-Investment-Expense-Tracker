@@ -6,17 +6,12 @@
 import React, { useState } from 'react';
 import {
   Menu,
-  Plus,
   ArrowDownRight,
   ArrowUpRight,
-  HardDrive,
   X,
   Download,
-  LayoutDashboard,
-  FolderTree,
-  Building,
-  Receipt,
   Target,
+  Smartphone,
 } from 'lucide-react';
 import { useAppStore, NavigationScreen } from './store/useAppStore';
 import { BootScreen } from './modules/module1_boot/BootScreen';
@@ -31,6 +26,8 @@ import { ReactNativeExpoCodeViewer } from './modules/code_export/ReactNativeExpo
 import { AndroidApkInstallHub } from './modules/android_apk/AndroidApkInstallHub';
 import { SavingsGoalsManager } from './modules/module7_savings_goals/SavingsGoalsManager';
 import { usePWAInstall } from './hooks/usePWAInstall';
+import { useDeviceScreen } from './hooks/useDeviceScreen';
+import { DeviceScreenFitModal } from './components/DeviceScreenFitModal';
 
 export default function App() {
   const {
@@ -63,9 +60,17 @@ export default function App() {
   } = useAppStore();
 
   const { isInstallable, isInstalled, install } = usePWAInstall();
+  const {
+    deviceInfo,
+    activeSimulation,
+    setActiveSimulation,
+    isSimulating,
+    simulatedConfig,
+  } = useDeviceScreen();
 
   const [hasDismissedBoot, setHasDismissedBoot] = useState(false);
   const [quickModalMode, setQuickModalMode] = useState<'EXPENSE' | 'INCOME' | null>(null);
+  const [isDeviceFitModalOpen, setIsDeviceFitModalOpen] = useState(false);
 
   // If not booted yet or boot screen not dismissed, show Module 1 BootScreen
   if (!isBooted && !hasDismissedBoot) {
@@ -214,10 +219,30 @@ export default function App() {
         activeScreen={activeScreen}
         onSelectScreen={setActiveScreen}
         summary={summary}
+        deviceInfo={deviceInfo}
+        onOpenDeviceFitModal={() => {
+          setIsDrawerOpen(false);
+          setIsDeviceFitModalOpen(true);
+        }}
       />
 
-      {/* Standalone Mobile App Viewport Container */}
-      <div className="w-full max-w-lg min-h-screen bg-slate-900/90 border-x border-slate-800/80 shadow-2xl flex flex-col relative">
+      {/* Standalone Mobile App Viewport Container with Dynamic Model Fit */}
+      <div
+        style={{
+          maxWidth:
+            isSimulating && simulatedConfig.width
+              ? `${simulatedConfig.width}px`
+              : deviceInfo.isMobile
+              ? '100%'
+              : '32rem',
+          width: '100%',
+        }}
+        className={`min-h-screen bg-slate-900/90 shadow-2xl flex flex-col relative transition-all duration-200 ${
+          deviceInfo.isMobile && !isSimulating
+            ? 'border-x-0'
+            : 'border-x border-slate-800/80'
+        }`}
+      >
         {/* Native Mobile App Header Bar */}
         <header className="sticky top-0 z-30 h-14 bg-slate-950/95 backdrop-blur-md border-b border-slate-800 px-3 sm:px-4 flex items-center justify-between gap-2">
           {/* Menu button & Mobile Screen Title */}
@@ -239,7 +264,7 @@ export default function App() {
                   SQLite
                 </span>
               </div>
-              <span className="text-[10px] text-slate-400 font-medium truncate max-w-[170px] sm:max-w-[220px]">
+              <span className="text-[10px] text-slate-400 font-medium truncate max-w-[150px] sm:max-w-[200px]">
                 {getScreenTitle(activeScreen)}
               </span>
             </div>
@@ -247,6 +272,18 @@ export default function App() {
 
           {/* Quick Header Actions */}
           <div className="flex items-center gap-1.5 shrink-0">
+            {/* Mobile Screen Fit Status Button */}
+            <button
+              onClick={() => setIsDeviceFitModalOpen(true)}
+              className="px-2 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"
+              title={`Mobile Screen Fit: ${deviceInfo.modelName} (${deviceInfo.viewportWidth}×${deviceInfo.viewportHeight}) - Click to customize`}
+            >
+              <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="hidden sm:inline text-[10px] font-mono text-emerald-300">
+                {isSimulating ? simulatedConfig.name.split(' ')[0] : 'Fit'}
+              </span>
+            </button>
+
             {/* Direct APK Install Button if browser supports PWA installation */}
             {isInstallable && !isInstalled && (
               <button
@@ -297,79 +334,9 @@ export default function App() {
         </header>
 
         {/* Standalone Mobile Main Content (Natural scroll, no double scrollbars) */}
-        <main className="flex-1 w-full px-3 py-3.5 pb-28 overflow-x-hidden">
+        <main className="flex-1 w-full px-3 py-3.5 pb-8 overflow-x-hidden">
           {renderScreenContent()}
         </main>
-
-        {/* Standalone Mobile Bottom Navigation Bar (Persistent touch tab bar) */}
-        <nav className="fixed bottom-0 left-0 right-0 z-40 max-w-lg mx-auto bg-slate-950/95 backdrop-blur-xl border-t border-slate-800/90 px-3 py-2 flex items-center justify-between text-[10px]">
-          {/* Tab 1: Dashboard */}
-          <button
-            onClick={() => setActiveScreen('dashboard')}
-            className={`flex flex-col items-center gap-0.5 py-1 flex-1 cursor-pointer transition-colors ${
-              activeScreen === 'dashboard'
-                ? 'text-emerald-400 font-bold'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <LayoutDashboard className="w-4.5 h-4.5" />
-            <span>Home</span>
-          </button>
-
-          {/* Tab 2: Savings Goals */}
-          <button
-            onClick={() => setActiveScreen('savings_goals')}
-            className={`flex flex-col items-center gap-0.5 py-1 flex-1 relative cursor-pointer transition-colors ${
-              activeScreen === 'savings_goals'
-                ? 'text-amber-400 font-bold'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Target className="w-4.5 h-4.5" />
-            <span>Goals</span>
-            {savingsGoals.length > 0 && (
-              <span className="absolute top-0 right-3 w-2 h-2 rounded-full bg-amber-400" />
-            )}
-          </button>
-
-          {/* Tab 3: Raised Center Action Button (+) for Quick Entry Modal */}
-          <div className="flex-1 flex justify-center -mt-6">
-            <button
-              onClick={() => setQuickModalMode('EXPENSE')}
-              className="w-12 h-12 rounded-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black shadow-lg shadow-emerald-500/30 border-4 border-slate-950 flex items-center justify-center cursor-pointer active:scale-95 transition-transform"
-              title="Quick Add Transaction"
-              aria-label="Quick Add Transaction"
-            >
-              <Plus className="w-6 h-6 stroke-[3]" />
-            </button>
-          </div>
-
-          {/* Tab 4: Categories */}
-          <button
-            onClick={() => setActiveScreen('categories')}
-            className={`flex flex-col items-center gap-0.5 py-1 flex-1 cursor-pointer transition-colors ${
-              activeScreen === 'categories'
-                ? 'text-emerald-400 font-bold'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <FolderTree className="w-4.5 h-4.5" />
-            <span>Categories</span>
-          </button>
-
-          {/* Tab 5: Assets */}
-          <button
-            onClick={() => setActiveScreen('investments')}
-            className={`flex flex-col items-center gap-0.5 py-1 flex-1 cursor-pointer transition-colors ${
-              activeScreen === 'investments' || activeScreen === 'properties' || activeScreen === 'vehicles'
-                ? 'text-purple-400 font-bold'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Building className="w-4.5 h-4.5" />
-            <span>Assets</span>
-          </button>
-        </nav>
       </div>
 
       {/* Quick Add Modal (Direct Mobile Bottom Sheet / Modal) */}
@@ -422,6 +389,15 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Device Screen Fit & Model Inspector Modal */}
+      <DeviceScreenFitModal
+        isOpen={isDeviceFitModalOpen}
+        onClose={() => setIsDeviceFitModalOpen(false)}
+        deviceInfo={deviceInfo}
+        activeSimulation={activeSimulation}
+        onSelectSimulation={setActiveSimulation}
+      />
     </div>
   );
 }
