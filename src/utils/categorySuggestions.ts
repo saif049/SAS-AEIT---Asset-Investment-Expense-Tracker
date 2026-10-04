@@ -166,9 +166,30 @@ const EXPENSE_CATEGORY_PRESETS: Record<string, { tags: string[]; notes: string[]
       'Mutual fund monthly SIP contribution',
     ],
   },
+  payee: {
+    tags: ['#SuperShop', '#Shopkeeper', '#Grocers', '#CounterPayment', '#SupplierPayment', '#ProjectBank', '#RetailVendor'],
+    notes: [
+      'Super shop daily commodities purchase',
+      'Local shopkeeper payment settlement',
+      'Fresh market grocers purchase',
+      'Counter direct cash payment',
+      'Authorized supplier vendor invoice settlement',
+      'Project Bank institutional disbursement',
+    ],
+  },
 };
 
 const INCOME_CATEGORY_PRESETS: Record<string, { tags: string[]; notes: string[] }> = {
+  payer: {
+    tags: ['#MyGovt', '#Institution', '#ProjectFund', '#BuyerPayment', '#BankDisbursement', '#GovtTreasury'],
+    notes: [
+      'My Govt official treasury disbursement credited',
+      'Institutional organization grant / payout received',
+      'Project milestone contract remittance received',
+      'Commercial buyer trade settlement payment',
+      'Commercial Bank institutional transfer credit',
+    ],
+  },
   salary: {
     tags: ['#MonthlySalary', '#ExecutivePay', '#FestivalBonus', '#OvertimePay', '#Allowance', '#Arrears'],
     notes: [

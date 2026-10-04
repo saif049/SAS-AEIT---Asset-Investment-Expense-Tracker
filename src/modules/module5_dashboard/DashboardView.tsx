@@ -53,7 +53,7 @@ import {
   CheckCircle2,
   LineChart,
 } from 'lucide-react';
-import { D3RollingAverageChart } from './D3RollingAverageChart';
+import { SpendingTrendChart } from './SpendingTrendChart';
 import {
   EnrichedExpense,
   EnrichedIncome,
@@ -707,7 +707,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <div>
           <h2 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
             <BarChart3 className="w-5 h-5 text-emerald-400" />
-            Executive Financial & Asset Dashboard
+            Financial & Asset Dashboard
           </h2>
           <p className="text-xs text-slate-400">
             Module 5: Real-Time Cashflows, Relational Drill-Downs & Mileage Intelligence
@@ -749,7 +749,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </button>
           </div>
 
-          {/* Jump to Card B (High-Visibility Highlight) */}
+          {/* Jump to Card B */}
           <button
             onClick={() => {
               const el = document.getElementById('card-b-container');
@@ -757,24 +757,24 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 el.scrollIntoView({ behavior: 'smooth', block: 'center' });
               }
             }}
-            className="px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-500/20 border-2 border-emerald-400 text-emerald-300 hover:bg-emerald-500/30 transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-emerald-500/20"
+            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/30 transition-all flex items-center gap-1.5 cursor-pointer"
           >
             <BarChart3 className="w-3.5 h-3.5 text-emerald-400" />
             <span>Card B: Bar</span>
           </button>
 
-          {/* Jump to D3.js 30-Day Rolling Average Line Chart */}
+          {/* Jump to Recharts Spending Trend Line Chart */}
           <button
             onClick={() => {
-              const el = document.getElementById('d3-rolling-chart-container');
+              const el = document.getElementById('spending-trend-chart-container');
               if (el) {
                 el.scrollIntoView({ behavior: 'smooth', block: 'center' });
               }
             }}
-            className="px-3 py-1.5 text-xs font-bold rounded-lg bg-teal-500/20 border-2 border-teal-400 text-teal-300 hover:bg-teal-500/30 transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-teal-500/20"
+            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-rose-500/20 border border-rose-500/40 text-rose-300 hover:bg-rose-500/30 transition-all flex items-center gap-1.5 cursor-pointer"
           >
-            <LineChart className="w-3.5 h-3.5 text-teal-400" />
-            <span>30D Rolling D3</span>
+            <TrendingDown className="w-3.5 h-3.5 text-rose-400" />
+            <span>Spending Trend</span>
           </button>
 
           {/* Jump to Budget Planner */}
@@ -785,7 +785,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 el.scrollIntoView({ behavior: 'smooth', block: 'center' });
               }
             }}
-            className="px-3 py-1.5 text-xs font-bold rounded-lg bg-purple-500/20 border-2 border-purple-400 text-purple-300 hover:bg-purple-500/30 transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-purple-500/20"
+            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-purple-500/20 border border-purple-500/40 text-purple-300 hover:bg-purple-500/30 transition-all flex items-center gap-1.5 cursor-pointer"
           >
             <Wallet className="w-3.5 h-3.5 text-purple-400" />
             <span>Budget Planner</span>
@@ -794,7 +794,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           {/* Export CSV Trigger */}
           <button
             onClick={() => setIsExportModalOpen(true)}
-            className="px-3 py-1.5 text-xs font-bold rounded-lg bg-teal-500/20 border-2 border-teal-400 text-teal-300 hover:bg-teal-500/30 transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-teal-500/20"
+            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-teal-500/20 border border-teal-500/40 text-teal-300 hover:bg-teal-500/30 transition-all flex items-center gap-1.5 cursor-pointer"
             title="Download CSV spreadsheet of SQLite Incomes and Expenses"
           >
             <FileSpreadsheet className="w-3.5 h-3.5 text-teal-400" />
@@ -1280,10 +1280,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
 
       {/* ---------------------------------------------------- */}
-      {/* D3.JS 30-DAY ROLLING AVERAGE LINE CHART (EXPENSES VS INCOME) */}
+      {/* RECHARTS: 30-DAY SPENDING TREND LINE CHART */}
       {/* ---------------------------------------------------- */}
-      <div id="d3-rolling-chart-container" className="scroll-mt-6">
-        <D3RollingAverageChart expenses={expenses} incomes={incomes} />
+      <div id="spending-trend-chart-container" className="scroll-mt-6">
+        <SpendingTrendChart expenses={expenses} />
       </div>
 
       {/* ---------------------------------------------------- */}

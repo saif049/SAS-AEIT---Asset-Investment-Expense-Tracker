@@ -12,6 +12,7 @@ import {
   Download,
   Target,
   Smartphone,
+  CheckCircle2,
 } from 'lucide-react';
 import { useAppStore, NavigationScreen } from './store/useAppStore';
 import { BootScreen } from './modules/module1_boot/BootScreen';
@@ -272,29 +273,6 @@ export default function App() {
 
           {/* Quick Header Actions */}
           <div className="flex items-center gap-1.5 shrink-0">
-            {/* Mobile Screen Fit Status Button */}
-            <button
-              onClick={() => setIsDeviceFitModalOpen(true)}
-              className="px-2 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"
-              title={`Mobile Screen Fit: ${deviceInfo.modelName} (${deviceInfo.viewportWidth}×${deviceInfo.viewportHeight}) - Click to customize`}
-            >
-              <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="hidden sm:inline text-[10px] font-mono text-emerald-300">
-                {isSimulating ? simulatedConfig.name.split(' ')[0] : 'Fit'}
-              </span>
-            </button>
-
-            {/* Direct APK Install Button if browser supports PWA installation */}
-            {isInstallable && !isInstalled && (
-              <button
-                onClick={install}
-                className="px-2.5 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-[11px] flex items-center gap-1 cursor-pointer transition-colors shadow-xs"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Install APK</span>
-              </button>
-            )}
-
             {/* Quick Savings Goals Shortcut */}
             <button
               onClick={() => setActiveScreen('savings_goals')}

@@ -93,6 +93,13 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
       badge: summary.systemLogsCount,
     },
     {
+      id: 'android_apk' as NavigationScreen,
+      label: 'Standalone Android APK',
+      subtitle: 'WebAPK, Pure APK & Offline Mobile',
+      icon: Smartphone,
+      highlight: true,
+    },
+    {
       id: 'backup_restore' as NavigationScreen,
       label: 'Backup & Restore',
       subtitle: 'Module 6 · Local JSON & Cloud Sync',

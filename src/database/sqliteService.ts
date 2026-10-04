@@ -100,6 +100,52 @@ class SQLiteDatabaseService {
             if (!parsed.nextIds.recurringExpenses) {
               parsed.nextIds.recurringExpenses = 5;
             }
+
+            // Ensure Payee (Expense) and Payer (Income) categories exist in hydrated state
+            const hasPayee = parsed.categories.some(
+              (c: Category) => c.name.toLowerCase() === 'payee' && c.type === 'EXPENSE'
+            );
+            if (!hasPayee) {
+              const payeeCatId = parsed.nextIds.categories++;
+              parsed.categories.push({
+                id: payeeCatId,
+                type: 'EXPENSE',
+                name: 'Payee',
+                is_active: 1,
+              });
+              const payeeSubs = ['Super shop', 'Shopkeeper', 'Grocers', 'Counter', 'Supplier', 'Project Bank'];
+              payeeSubs.forEach((subName) => {
+                parsed.subcategories.push({
+                  id: parsed.nextIds.subcategories++,
+                  category_id: payeeCatId,
+                  name: subName,
+                  is_active: 1,
+                });
+              });
+            }
+
+            const hasPayer = parsed.categories.some(
+              (c: Category) => c.name.toLowerCase() === 'payer' && c.type === 'INCOME'
+            );
+            if (!hasPayer) {
+              const payerCatId = parsed.nextIds.categories++;
+              parsed.categories.push({
+                id: payerCatId,
+                type: 'INCOME',
+                name: 'Payer',
+                is_active: 1,
+              });
+              const payerSubs = ['My Govt', 'Institution', 'Project', 'Buyer', 'Bank'];
+              payerSubs.forEach((subName) => {
+                parsed.subcategories.push({
+                  id: parsed.nextIds.subcategories++,
+                  category_id: payerCatId,
+                  name: subName,
+                  is_active: 1,
+                });
+              });
+            }
+
             this.state = parsed;
             this.persist();
             this.isInitialized = true;

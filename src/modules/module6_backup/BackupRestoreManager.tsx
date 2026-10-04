@@ -270,6 +270,149 @@ export const BackupRestoreManager: React.FC<BackupRestoreManagerProps> = ({
   };
 
   /**
+   * Dedicated Manual Tax Record Keeping Exporter
+   * Exports 100% of all expense and income logs into a downloadable, clean CSV file
+   * formatted for tax record keeping, deductions calculation, and NBR compliance.
+   */
+  const handleExportAllManualTaxCSV = (flowMode: 'ALL' | 'EXPENSE' | 'INCOME' = 'ALL') => {
+    try {
+      const records: {
+        id: string;
+        date: string;
+        type: 'INCOME' | 'EXPENSE';
+        amount_bdt: number;
+        category: string;
+        subcategory: string;
+        classification: string;
+        reference: string;
+        remarks: string;
+        created_at: string;
+      }[] = [];
+
+      const vehMap = new Map(vehicles.map((v) => [v.id, `${v.brand} ${v.model} (${v.reg_no})`]));
+      const propMap = new Map(properties.map((p) => [p.id, `${p.type} ${p.sub_type} - ${p.survey_type}`]));
+      const invMap = new Map(investments.map((i) => [i.id, `${i.type} #${i.id}`]));
+
+      if (flowMode === 'ALL' || flowMode === 'INCOME') {
+        allIncomes.forEach((inc) => {
+          let refStr = '-';
+          if (inc.source_type === 'PROPERTY' && inc.source_id) {
+            refStr = propMap.get(inc.source_id) || `Property #${inc.source_id}`;
+          } else if (inc.source_type === 'INVESTMENT' && inc.source_id) {
+            refStr = invMap.get(inc.source_id) || `Investment #${inc.source_id}`;
+          }
+
+          records.push({
+            id: `INC-${inc.id.toString().padStart(5, '0')}`,
+            date: inc.date,
+            type: 'INCOME',
+            amount_bdt: inc.amount_bdt,
+            category: inc.category_name || 'Income',
+            subcategory: inc.subcategory_name || 'General',
+            classification: inc.source_type,
+            reference: refStr,
+            remarks: inc.remarks || '',
+            created_at: inc.created_at,
+          });
+        });
+      }
+
+      if (flowMode === 'ALL' || flowMode === 'EXPENSE') {
+        allExpenses.forEach((exp) => {
+          let refStr = '-';
+          if (exp.expense_type === 'VEHICLE' && exp.reference_id) {
+            refStr = vehMap.get(exp.reference_id) || `Vehicle #${exp.reference_id}`;
+          } else if (exp.expense_type === 'PROPERTY' && exp.reference_id) {
+            refStr = propMap.get(exp.reference_id) || `Property #${exp.reference_id}`;
+          } else if (exp.expense_type === 'INVESTMENT' && exp.reference_id) {
+            refStr = invMap.get(exp.reference_id) || `Investment #${exp.reference_id}`;
+          }
+
+          records.push({
+            id: `EXP-${exp.id.toString().padStart(5, '0')}`,
+            date: exp.date,
+            type: 'EXPENSE',
+            amount_bdt: exp.amount_bdt,
+            category: exp.category_name || 'Expense',
+            subcategory: exp.subcategory_name || 'General',
+            classification: exp.expense_type,
+            reference: refStr,
+            remarks: exp.remarks || '',
+            created_at: exp.created_at,
+          });
+        });
+      }
+
+      // Sort chronologically descending
+      records.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime() || b.id.localeCompare(a.id));
+
+      const totalIncomes = records.filter((r) => r.type === 'INCOME').reduce((s, r) => s + r.amount_bdt, 0);
+      const totalExpenses = records.filter((r) => r.type === 'EXPENSE').reduce((s, r) => s + r.amount_bdt, 0);
+      const netSurplus = totalIncomes - totalExpenses;
+
+      const headers = [
+        'SL No',
+        'Record ID',
+        'Date (YYYY-MM-DD)',
+        'Transaction Type',
+        'Amount in BDT',
+        'Classification',
+        'Primary Category',
+        'Sub-Category / Payee-Payer Entity',
+        'Linked Asset / Reference',
+        'Tax Remarks / Voucher Description',
+        'Audit Created At',
+      ];
+
+      const csvRows: string[] = [];
+      csvRows.push('"=== SAS-AEIT TAX RECORD KEEPING & AUDIT EXPORT ==="');
+      csvRows.push(`"Report Name: Complete Incomes & Allowable Expenses Log for Manual Tax Filing"`);
+      csvRows.push(`"Export Timestamp: ${new Date().toISOString()} | Total Records: ${records.length}"`);
+      csvRows.push(`"Gross Income Receipts (BDT): ${totalIncomes.toFixed(2)}"`);
+      csvRows.push(`"Total Allowable Deductible Expenses (BDT): ${totalExpenses.toFixed(2)}"`);
+      csvRows.push(`"Net Taxable Income Balance (BDT): ${netSurplus.toFixed(2)}"`);
+      csvRows.push('');
+      csvRows.push(headers.map((h) => `"${h}"`).join(','));
+
+      records.forEach((row, idx) => {
+        const line = [
+          (idx + 1).toString(),
+          row.id,
+          row.date,
+          row.type,
+          row.amount_bdt.toFixed(2),
+          row.classification,
+          row.category.replace(/"/g, '""'),
+          row.subcategory.replace(/"/g, '""'),
+          row.reference.replace(/"/g, '""'),
+          row.remarks.replace(/"/g, '""'),
+          row.created_at,
+        ];
+        csvRows.push(line.map((v) => `"${v}"`).join(','));
+      });
+
+      csvRows.push('');
+      csvRows.push('"=== END OF MANUAL TAX LEDGER ==="');
+
+      const bom = '\uFEFF';
+      const blob = new Blob([bom + csvRows.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const modeSuffix = flowMode === 'ALL' ? 'All_Incomes_Expenses' : flowMode === 'EXPENSE' ? 'Expenses_Only' : 'Incomes_Only';
+      link.download = `SAS_AEIT_Tax_Record_Keeping_${modeSuffix}_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      showStatus('success', `Exported ${records.length} records to CSV for manual tax record keeping.`);
+    } catch (err: unknown) {
+      showStatus('error', err instanceof Error ? err.message : 'Tax CSV export failed');
+    }
+  };
+
+  /**
    * Generates and downloads a Microsoft Excel XML Spreadsheet (.xls)
    */
   const handleExportTaxExcel = () => {
@@ -502,6 +645,50 @@ export const BackupRestoreManager: React.FC<BackupRestoreManagerProps> = ({
             >
               <Download className="w-3.5 h-3.5" />
               <span>Download Excel (.xls)</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Manual Tax Record Keeping Direct CSV Action */}
+        <div className="p-4 rounded-xl bg-slate-950/80 border border-emerald-500/30 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                Manual Tax Record Keeping
+              </span>
+              <span className="text-xs text-slate-400">
+                {allExpenses.length} Expenses + {allIncomes.length} Incomes ({allExpenses.length + allIncomes.length} Total Logs)
+              </span>
+            </div>
+            <p className="text-xs text-slate-300 mt-1">
+              Download complete raw transaction logs with categories, payee/payer entities, BDT figures, and voucher remarks for manual tax return filing.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              onClick={() => handleExportAllManualTaxCSV('ALL')}
+              className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer shadow-md shadow-emerald-500/20"
+              title="Download all incomes and expenses CSV for tax filing"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Export Tax CSV (All Logs)</span>
+            </button>
+            <button
+              onClick={() => handleExportAllManualTaxCSV('EXPENSE')}
+              className="px-3 py-2 bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-300 font-semibold text-xs rounded-xl flex items-center gap-1 transition-colors cursor-pointer"
+              title="Export only deductible expenses for manual tax deductions schedule"
+            >
+              <Download className="w-3 h-3" />
+              <span>Expenses Only</span>
+            </button>
+            <button
+              onClick={() => handleExportAllManualTaxCSV('INCOME')}
+              className="px-3 py-2 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/40 text-blue-300 font-semibold text-xs rounded-xl flex items-center gap-1 transition-colors cursor-pointer"
+              title="Export only gross income logs for income tax assessment"
+            >
+              <Download className="w-3 h-3" />
+              <span>Incomes Only</span>
             </button>
           </div>
         </div>

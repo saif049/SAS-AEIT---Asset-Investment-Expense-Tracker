@@ -27,6 +27,8 @@ import {
   Repeat,
   Clock,
   Sparkles,
+  Search,
+  X,
 } from 'lucide-react';
 import { sqliteService } from '../../database/sqliteService';
 import {
@@ -132,7 +134,32 @@ export const UniversalEntryForm: React.FC<UniversalEntryFormProps> = ({
     } else {
       setSelectedSubCategoryId(null);
     }
+    setEntitySearchQuery('');
   }, [cascadingSubCategories]);
+
+  // Real-time search query for Payee/Payer entities and sub-categories
+  const [entitySearchQuery, setEntitySearchQuery] = useState('');
+
+  const selectedCategory = useMemo(() => {
+    return activeCategories.find((c) => c.id === selectedCategoryId);
+  }, [activeCategories, selectedCategoryId]);
+
+  const isPayeeOrPayer = useMemo(() => {
+    if (!selectedCategory) return false;
+    const n = selectedCategory.name.toLowerCase();
+    return n === 'payee' || n === 'payer';
+  }, [selectedCategory]);
+
+  const payeeOrPayerCat = useMemo(() => {
+    const targetName = entryMode === 'EXPENSE' ? 'payee' : 'payer';
+    return activeCategories.find((c) => c.name.toLowerCase() === targetName);
+  }, [activeCategories, entryMode]);
+
+  const filteredSubCategories = useMemo(() => {
+    if (!entitySearchQuery.trim()) return cascadingSubCategories;
+    const q = entitySearchQuery.toLowerCase().trim();
+    return cascadingSubCategories.filter((sub) => sub.name.toLowerCase().includes(q));
+  }, [cascadingSubCategories, entitySearchQuery]);
 
   // ----------------------------------------------------
   // Category Intelligence & Pre-Population Engine
@@ -156,10 +183,6 @@ export const UniversalEntryForm: React.FC<UniversalEntryFormProps> = ({
   useEffect(() => {
     loadHistory();
   }, [loadHistory]);
-
-  const selectedCategory = useMemo(() => {
-    return activeCategories.find((c) => c.id === selectedCategoryId);
-  }, [activeCategories, selectedCategoryId]);
 
   const suggestions = useMemo(() => {
     return getCategorySmartSuggestions({
@@ -499,14 +522,38 @@ export const UniversalEntryForm: React.FC<UniversalEntryFormProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Category Dropdown */}
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5 flex items-center gap-1.5">
-              <Tag className="w-3.5 h-3.5 text-emerald-400" />
-              Primary Category
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                <Tag className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Primary Category</span>
+              </label>
+              {/* Quick Jump to Payee or Payer */}
+              {payeeOrPayerCat && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedCategoryId(payeeOrPayerCat.id);
+                    setEntitySearchQuery('');
+                  }}
+                  className={`text-[10px] font-mono px-2 py-0.5 rounded cursor-pointer transition-colors flex items-center gap-1 ${
+                    selectedCategoryId === payeeOrPayerCat.id
+                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold'
+                      : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+                  }`}
+                  title={`Quick switch to ${payeeOrPayerCat.name} category`}
+                >
+                  <Sparkles className="w-3 h-3 text-emerald-400" />
+                  <span>Quick {payeeOrPayerCat.name}</span>
+                </button>
+              )}
+            </div>
             <div className="relative">
               <select
                 value={selectedCategoryId || ''}
-                onChange={(e) => setSelectedCategoryId(Number(e.target.value))}
+                onChange={(e) => {
+                  setSelectedCategoryId(Number(e.target.value));
+                  setEntitySearchQuery('');
+                }}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 appearance-none focus:outline-none focus:border-emerald-500 cursor-pointer"
                 required
               >
@@ -520,24 +567,97 @@ export const UniversalEntryForm: React.FC<UniversalEntryFormProps> = ({
             </div>
           </div>
 
-          {/* Cascading SubCategory Dropdown (Requirement 3) */}
+          {/* Cascading SubCategory / Entity Selection with Real-Time Search Filter */}
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5 flex items-center gap-1.5">
-              <Layers className="w-3.5 h-3.5 text-emerald-400" />
-              Cascading Sub-Category
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5 text-emerald-400" />
+                <span>
+                  {isPayeeOrPayer
+                    ? (entryMode === 'EXPENSE' ? 'Payee Entity / Beneficiary' : 'Payer Entity / Originator')
+                    : 'Cascading Sub-Category'}
+                </span>
+              </label>
+              {cascadingSubCategories.length > 0 && (
+                <span className="text-[10px] font-mono text-slate-400">
+                  {filteredSubCategories.length} / {cascadingSubCategories.length}
+                </span>
+              )}
+            </div>
+
+            {/* Real-time Search Filter Bar */}
+            <div className="relative mb-2">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={entitySearchQuery}
+                onChange={(e) => setEntitySearchQuery(e.target.value)}
+                placeholder={
+                  isPayeeOrPayer
+                    ? `Search ${selectedCategory?.name} (e.g. ${entryMode === 'EXPENSE' ? 'Super shop, Grocers...' : 'Govt, Bank...'})`
+                    : 'Search sub-categories / entities...'
+                }
+                className="w-full bg-slate-950 border border-slate-700/80 rounded-lg pl-8 pr-7 py-1.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+              />
+              {entitySearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setEntitySearchQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 p-0.5 cursor-pointer"
+                  title="Clear search"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+
+            {/* Entity Quick-Select Chips (live filtered) */}
+            {filteredSubCategories.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2 max-h-24 overflow-y-auto p-1.5 bg-slate-950/70 border border-slate-800/80 rounded-lg">
+                {filteredSubCategories.map((sub) => (
+                  <button
+                    key={sub.id}
+                    type="button"
+                    onClick={() => setSelectedSubCategoryId(sub.id)}
+                    className={`px-2 py-0.5 text-[11px] rounded-md transition-all cursor-pointer flex items-center gap-1 ${
+                      selectedSubCategoryId === sub.id
+                        ? 'bg-emerald-500 text-slate-950 font-bold shadow-xs'
+                        : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'
+                    }`}
+                  >
+                    <span>{sub.name}</span>
+                    {selectedSubCategoryId === sub.id && <CheckCircle2 className="w-2.5 h-2.5" />}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {filteredSubCategories.length === 0 && entitySearchQuery && (
+              <div className="p-2 mb-2 rounded-lg bg-rose-500/10 border border-rose-500/20 text-[11px] text-rose-300 flex items-center justify-between">
+                <span>No entities matching "{entitySearchQuery}"</span>
+                <button
+                  type="button"
+                  onClick={() => setEntitySearchQuery('')}
+                  className="text-xs text-rose-400 hover:underline cursor-pointer"
+                >
+                  Clear
+                </button>
+              </div>
+            )}
+
+            {/* Standard Dropdown Select */}
             <div className="relative">
               <select
                 value={selectedSubCategoryId || ''}
                 onChange={(e) => setSelectedSubCategoryId(Number(e.target.value))}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 appearance-none focus:outline-none focus:border-emerald-500 cursor-pointer"
                 required
-                disabled={cascadingSubCategories.length === 0}
+                disabled={filteredSubCategories.length === 0}
               >
-                {cascadingSubCategories.length === 0 ? (
-                  <option value="">No subcategories available</option>
+                {filteredSubCategories.length === 0 ? (
+                  <option value="">No subcategories match search</option>
                 ) : (
-                  cascadingSubCategories.map((sub) => (
+                  filteredSubCategories.map((sub) => (
                     <option key={sub.id} value={sub.id}>
                       {sub.name}
                     </option>

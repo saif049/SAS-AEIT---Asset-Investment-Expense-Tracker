@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "SAS-AEIT - Financial & Asset Tracker",
+    "slug": "sas-aeit-tracker",
+    "version": "1.0.0",
+    "orientation": "default",
+    "icon": "./public/pwa-512x512.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./public/pwa-512x512.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#020617"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.saifahmed.sasaeit"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./public/pwa-maskable-512x512.png",
+        "backgroundColor": "#020617"
+      },
+      "package": "com.saifahmed.sasaeit",
+      "versionCode": 1,
+      "permissions": [
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "INTERNET"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-sqlite",
+        {
+          "enableFTS": true
+        }
+      ]
+    ]
+  }
+}

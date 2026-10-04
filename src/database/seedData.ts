@@ -12,6 +12,11 @@ export interface MasterCategorySeed {
 export const MASTER_CATEGORIES_DATA: MasterCategorySeed[] = [
   // --- DIRECT INCOME CATEGORIES ---
   {
+    name: 'Payer',
+    type: 'INCOME',
+    subcategories: ['My Govt', 'Institution', 'Project', 'Buyer', 'Bank'],
+  },
+  {
     name: 'Govt Payments',
     type: 'INCOME',
     subcategories: [
@@ -37,6 +42,18 @@ export const MASTER_CATEGORIES_DATA: MasterCategorySeed[] = [
   },
 
   // --- DIRECT EXPENSE CATEGORIES ---
+  {
+    name: 'Payee',
+    type: 'EXPENSE',
+    subcategories: [
+      'Super shop',
+      'Shopkeeper',
+      'Grocers',
+      'Counter',
+      'Supplier',
+      'Project Bank',
+    ],
+  },
   {
     name: 'Accommodations',
     type: 'EXPENSE',

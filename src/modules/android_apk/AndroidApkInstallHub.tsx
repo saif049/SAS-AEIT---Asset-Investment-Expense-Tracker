@@ -81,11 +81,47 @@ export const AndroidApkInstallHub: React.FC = () => {
     }
   };
 
+  const easJson = {
+    cli: {
+      version: ">= 12.0.0"
+    },
+    build: {
+      development: {
+        developmentClient: true,
+        distribution: "internal"
+      },
+      preview: {
+        distribution: "internal",
+        android: {
+          buildType: "apk"
+        }
+      },
+      production: {
+        android: {
+          buildType: "apk"
+        }
+      }
+    },
+    submit: {
+      production: {}
+    }
+  };
+
   const handleDownloadAppJson = () => {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(expoAppJson, null, 2));
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute("href", dataStr);
     downloadAnchor.setAttribute("download", "app.json");
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+  };
+
+  const handleDownloadEasJson = () => {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(easJson, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", "eas.json");
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
@@ -290,13 +326,24 @@ bubblewrap build
                 Generate an installable APK file that you can directly sideload onto any Android phone or tablet without Google Play.
               </p>
             </div>
-            <button
-              onClick={handleDownloadAppJson}
-              className="px-3.5 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg text-xs flex items-center gap-1.5 transition-colors cursor-pointer self-start sm:self-auto"
-            >
-              <Download className="w-4 h-4" />
-              <span>Download app.json</span>
-            </button>
+            <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+              <button
+                onClick={handleDownloadAppJson}
+                className="px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                title="Download Expo project configuration"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>app.json</span>
+              </button>
+              <button
+                onClick={handleDownloadEasJson}
+                className="px-3 py-2 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold rounded-lg text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                title="Download EAS pure APK build profile"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>eas.json (Pure APK)</span>
+              </button>
+            </div>
           </div>
 
           <div className="bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
