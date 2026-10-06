@@ -161,6 +161,16 @@ export const UniversalEntryForm: React.FC<UniversalEntryFormProps> = ({
     return cascadingSubCategories.filter((sub) => sub.name.toLowerCase().includes(q));
   }, [cascadingSubCategories, entitySearchQuery]);
 
+  // Ensure selected subcategory is valid within the filtered list
+  useEffect(() => {
+    if (filteredSubCategories.length > 0) {
+      const isCurrentInFiltered = filteredSubCategories.some((s) => s.id === selectedSubCategoryId);
+      if (!isCurrentInFiltered) {
+        setSelectedSubCategoryId(filteredSubCategories[0].id);
+      }
+    }
+  }, [filteredSubCategories, selectedSubCategoryId]);
+
   // ----------------------------------------------------
   // Category Intelligence & Pre-Population Engine
   // ----------------------------------------------------

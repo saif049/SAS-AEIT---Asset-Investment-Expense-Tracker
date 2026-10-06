@@ -13,6 +13,7 @@ import {
   Target,
   Smartphone,
   CheckCircle2,
+  ShoppingBag,
 } from 'lucide-react';
 import { useAppStore, NavigationScreen } from './store/useAppStore';
 import { BootScreen } from './modules/module1_boot/BootScreen';
@@ -26,6 +27,8 @@ import { BackupRestoreManager } from './modules/module6_backup/BackupRestoreMana
 import { ReactNativeExpoCodeViewer } from './modules/code_export/ReactNativeExpoCodeViewer';
 import { AndroidApkInstallHub } from './modules/android_apk/AndroidApkInstallHub';
 import { SavingsGoalsManager } from './modules/module7_savings_goals/SavingsGoalsManager';
+import { DevRepairTaskManager } from './modules/module7_dev_repair/DevRepairTaskManager';
+import { PurchaseTasksManager } from './modules/module8_purchase_tasks/PurchaseTasksManager';
 import { usePWAInstall } from './hooks/usePWAInstall';
 import { useDeviceScreen } from './hooks/useDeviceScreen';
 import { DeviceScreenFitModal } from './components/DeviceScreenFitModal';
@@ -49,6 +52,7 @@ export default function App() {
     savingsGoals,
     budgetLimits,
     budgetComparisons,
+    purchaseTasks,
     summary,
     refresh,
     addSavingsGoal,
@@ -58,6 +62,11 @@ export default function App() {
     deleteSavingsGoal,
     setBudgetLimit,
     batchSetBudgetLimits,
+    addPurchaseTask,
+    updatePurchaseTask,
+    togglePurchaseTaskStatus,
+    completePurchaseTask,
+    deletePurchaseTask,
   } = useAppStore();
 
   const { isInstallable, isInstalled, install } = usePWAInstall();
@@ -114,6 +123,20 @@ export default function App() {
           />
         );
 
+      case 'purchase_tasks':
+        return (
+          <PurchaseTasksManager
+            purchaseTasks={purchaseTasks}
+            categories={categories}
+            subcategories={subcategories}
+            onAddTask={addPurchaseTask}
+            onUpdateTask={updatePurchaseTask}
+            onToggleStatus={togglePurchaseTaskStatus}
+            onCompleteTask={completePurchaseTask}
+            onDeleteTask={deletePurchaseTask}
+          />
+        );
+
       case 'entry':
         return (
           <UniversalEntryForm
@@ -152,6 +175,9 @@ export default function App() {
       case 'audit_logs':
         return <AuditLogsViewer logs={systemLogs} />;
 
+      case 'development_repair':
+        return <DevRepairTaskManager />;
+
       case 'android_apk':
         return <AndroidApkInstallHub />;
 
@@ -187,6 +213,10 @@ export default function App() {
     switch (screen) {
       case 'dashboard':
         return 'Executive Financial Dashboard';
+      case 'purchase_tasks':
+        return 'Module 8: Purchase Tasks & Android Widget';
+      case 'development_repair':
+        return 'Module 7: Development & Repair Tasks';
       case 'savings_goals':
         return 'Savings Goals & Target Tracker';
       case 'entry':
@@ -273,10 +303,28 @@ export default function App() {
 
           {/* Quick Header Actions */}
           <div className="flex items-center gap-1.5 shrink-0">
+            {/* Quick Purchase Tasks Shortcut */}
+            <button
+              onClick={() => setActiveScreen('purchase_tasks')}
+              className={`p-1.5 sm:px-2 sm:py-1 rounded-lg border text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer ${
+                activeScreen === 'purchase_tasks'
+                  ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
+                  : 'bg-slate-800/80 border-slate-700 hover:bg-slate-800 text-slate-300'
+              }`}
+              title="Purchase Tasks & Android Widget"
+            >
+              <ShoppingBag className="w-4 h-4 text-emerald-400" />
+              {purchaseTasks.filter((t) => t.status === 'PENDING').length > 0 && (
+                <span className="text-[10px] bg-emerald-500/30 text-emerald-300 px-1.5 py-0.2 rounded-full font-mono font-bold">
+                  {purchaseTasks.filter((t) => t.status === 'PENDING').length}
+                </span>
+              )}
+            </button>
+
             {/* Quick Savings Goals Shortcut */}
             <button
               onClick={() => setActiveScreen('savings_goals')}
-              className={`p-1.5 sm:px-2.5 sm:py-1 rounded-lg border text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer ${
+              className={`p-1.5 sm:px-2 sm:py-1 rounded-lg border text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer ${
                 activeScreen === 'savings_goals'
                   ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
                   : 'bg-slate-800/80 border-slate-700 hover:bg-slate-800 text-slate-300'

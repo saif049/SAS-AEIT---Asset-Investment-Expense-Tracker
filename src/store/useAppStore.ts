@@ -22,10 +22,15 @@ import {
   SavingsGoal,
   EnrichedRecurringExpense,
   RecurrenceFrequency,
+  EnrichedPurchaseTask,
+  PurchaseTask,
+  PurchaseTaskStatus,
 } from '../types/database';
 
 export type NavigationScreen =
   | 'dashboard'
+  | 'purchase_tasks'
+  | 'development_repair'
   | 'savings_goals'
   | 'entry'
   | 'categories'
@@ -57,12 +62,13 @@ export function useAppStore() {
   const [budgetLimits, setBudgetLimits] = useState<BudgetLimit[]>([]);
   const [budgetComparisons, setBudgetComparisons] = useState<CategoryBudgetComparison[]>([]);
   const [recurringExpenses, setRecurringExpenses] = useState<EnrichedRecurringExpense[]>([]);
+  const [purchaseTasks, setPurchaseTasks] = useState<EnrichedPurchaseTask[]>([]);
   const [summary, setSummary] = useState(sqliteService.getDatabaseSummary());
 
   const reloadData = useCallback(async () => {
     try {
       await sqliteService.initDatabase();
-      const [cats, subs, exps, incs, logs, invs, props, vehs, fuels, goals, budgets, comparisons, recurrings] =
+      const [cats, subs, exps, incs, logs, invs, props, vehs, fuels, goals, budgets, comparisons, recurrings, purchases] =
         await Promise.all([
           sqliteService.getCategories(),
           sqliteService.getSubCategories(),
@@ -77,6 +83,7 @@ export function useAppStore() {
           sqliteService.getBudgetLimits(),
           sqliteService.getCategoryBudgetComparisons(),
           sqliteService.getRecurringExpenses(),
+          sqliteService.getPurchaseTasks(),
         ]);
 
       setCategories(cats);
@@ -92,6 +99,7 @@ export function useAppStore() {
       setBudgetLimits(budgets);
       setBudgetComparisons(comparisons);
       setRecurringExpenses(recurrings);
+      setPurchaseTasks(purchases);
       setSummary(sqliteService.getDatabaseSummary());
       setIsBooted(true);
     } catch (err) {
@@ -132,6 +140,7 @@ export function useAppStore() {
     budgetLimits,
     budgetComparisons,
     recurringExpenses,
+    purchaseTasks,
     summary,
     refresh: reloadData,
     // Savings Goal Actions
@@ -197,6 +206,43 @@ export function useAppStore() {
       const res = await sqliteService.deleteRecurringExpense(id);
       await reloadData();
       return res;
+    },
+    // Future Purchase Task Actions
+    addPurchaseTask: async (params: Parameters<typeof sqliteService.addPurchaseTask>[0]) => {
+      const res = await sqliteService.addPurchaseTask(params);
+      await reloadData();
+      return res;
+    },
+    updatePurchaseTask: async (id: number, updates: Partial<PurchaseTask>) => {
+      const res = await sqliteService.updatePurchaseTask(id, updates);
+      await reloadData();
+      return res;
+    },
+    togglePurchaseTaskStatus: async (id: number) => {
+      const res = await sqliteService.togglePurchaseTaskStatus(id);
+      await reloadData();
+      return res;
+    },
+    completePurchaseTask: async (
+      id: number,
+      actual_cost_bdt?: number,
+      createExpenseRecord?: boolean,
+      category_id?: number,
+      subcategory_id?: number
+    ) => {
+      const res = await sqliteService.completePurchaseTask(id, actual_cost_bdt, createExpenseRecord, category_id, subcategory_id);
+      await reloadData();
+      return res;
+    },
+    deletePurchaseTask: async (id: number) => {
+      const res = await sqliteService.deletePurchaseTask(id);
+      await reloadData();
+      return res;
+    },
+    // Deployment Clean Action: wipes temporary demo records while preserving categories
+    cleanTemporaryDataForDeployment: async () => {
+      await sqliteService.cleanTemporaryDataForDeployment();
+      await reloadData();
     },
     // Direct CSV Export Action
     exportTransactionsCSV: async (options?: {

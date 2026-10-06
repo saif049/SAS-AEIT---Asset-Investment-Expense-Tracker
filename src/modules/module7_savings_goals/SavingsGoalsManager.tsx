@@ -87,6 +87,7 @@ export const SavingsGoalsManager: React.FC<SavingsGoalsManagerProps> = ({
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingGoal, setEditingGoal] = useState<EnrichedSavingsGoal | null>(null);
   const [contributeGoal, setContributeGoal] = useState<EnrichedSavingsGoal | null>(null);
+  const [goalToDelete, setGoalToDelete] = useState<EnrichedSavingsGoal | null>(null);
   const [contributionAmount, setContributionAmount] = useState('');
   const [contributionNote, setContributionNote] = useState('');
 
@@ -122,11 +123,13 @@ export const SavingsGoalsManager: React.FC<SavingsGoalsManagerProps> = ({
           label = `Stocks · ${details.bo_id ? `BO #${details.bo_id}` : 'Portfolio'} (Val: ৳ ${Number(details.total_portfolio_value_bdt || 0).toLocaleString()})`;
           value = Number(details.total_portfolio_value_bdt || 0);
         } else if (inv.type === 'FDR') {
-          label = `FDR · ${details.bank || 'Bank'} (৳ ${Number(details.principal || 0).toLocaleString()})`;
-          value = Number(details.principal || 0);
+          const p = Number(details.principal_bdt ?? details.principal ?? 0);
+          label = `FDR · ${details.bank || 'Bank'} (৳ ${p.toLocaleString()})`;
+          value = p;
         } else if (inv.type === 'SAVINGS_CERTIFICATE') {
-          label = `Sanchayapatra · #${details.instrument_no || ''} (৳ ${Number(details.principal || 0).toLocaleString()})`;
-          value = Number(details.principal || 0);
+          const p = Number(details.principal_bdt ?? details.principal ?? 0);
+          label = `Sanchayapatra · #${details.instrument_no || ''} (৳ ${p.toLocaleString()})`;
+          value = p;
         } else if (inv.type === 'LAND') {
           label = `Land · ${details.location} (৳ ${Number(details.current_estimated_value_bdt || details.purchase_price_bdt || 0).toLocaleString()})`;
           value = Number(details.current_estimated_value_bdt || details.purchase_price_bdt || 0);
@@ -303,14 +306,19 @@ export const SavingsGoalsManager: React.FC<SavingsGoalsManagerProps> = ({
     }
   };
 
-  const handleDelete = async (goal: EnrichedSavingsGoal) => {
-    if (window.confirm(`Are you sure you want to delete the goal "${goal.title}"?`)) {
-      try {
-        await onDeleteGoal(goal.id);
-        showNotification('success', `Goal "${goal.title}" deleted.`);
-      } catch (err: unknown) {
-        showNotification('error', err instanceof Error ? err.message : 'Deletion failed.');
-      }
+  const handleDelete = (goal: EnrichedSavingsGoal) => {
+    setGoalToDelete(goal);
+  };
+
+  const confirmDeleteGoal = async () => {
+    if (!goalToDelete) return;
+    try {
+      await onDeleteGoal(goalToDelete.id);
+      showNotification('success', `Goal "${goalToDelete.title}" deleted.`);
+    } catch (err: unknown) {
+      showNotification('error', err instanceof Error ? err.message : 'Deletion failed.');
+    } finally {
+      setGoalToDelete(null);
     }
   };
 
@@ -1016,6 +1024,52 @@ export const SavingsGoalsManager: React.FC<SavingsGoalsManagerProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Goal Confirmation Modal */}
+      {goalToDelete && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Trash2 className="w-5 h-5 text-rose-400" />
+                <span>Delete Savings Goal</span>
+              </h3>
+              <button
+                onClick={() => setGoalToDelete(null)}
+                className="text-slate-400 hover:text-white p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="py-4 space-y-2 text-xs text-slate-300">
+              <p>
+                Are you sure you want to delete <strong className="text-white">"{goalToDelete.title}"</strong>?
+              </p>
+              <p className="text-slate-400">
+                Target amount: <span className="font-mono text-emerald-400">{formatBDT(goalToDelete.target_amount_bdt)}</span>. This action is audited in SQLite SystemLogs.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setGoalToDelete(null)}
+                className="px-4 py-2 rounded-xl text-xs text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteGoal}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-500 hover:bg-rose-600 text-white transition-colors cursor-pointer"
+              >
+                Delete Goal
+              </button>
+            </div>
           </div>
         </div>
       )}

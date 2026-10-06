@@ -27,7 +27,7 @@ import { usePWAInstall } from '../../hooks/usePWAInstall';
 export const AndroidApkInstallHub: React.FC = () => {
   const { isInstallable, isInstalled, isAndroid, isIOS, install } = usePWAInstall();
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'direct_apk' | 'expo_eas' | 'twa_bubblewrap'>('direct_apk');
+  const [activeTab, setActiveTab] = useState<'direct_apk' | 'android_widget' | 'expo_eas' | 'twa_bubblewrap'>('direct_apk');
 
   const copyToClipboard = async (text: string, sectionId: string) => {
     await navigator.clipboard.writeText(text);
@@ -208,6 +208,18 @@ bubblewrap build
         </button>
 
         <button
+          onClick={() => setActiveTab('android_widget')}
+          className={`px-3.5 py-2 text-xs font-semibold rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 ${
+            activeTab === 'android_widget'
+              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <Sparkles className="w-4 h-4 text-emerald-400" />
+          <span>2. Android Home Screen Widget</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('expo_eas')}
           className={`px-3.5 py-2 text-xs font-semibold rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 ${
             activeTab === 'expo_eas'
@@ -216,7 +228,7 @@ bubblewrap build
           }`}
         >
           <Layers className="w-4 h-4" />
-          <span>2. Expo Standalone APK Build</span>
+          <span>3. Expo Standalone APK Build</span>
         </button>
 
         <button
@@ -228,7 +240,7 @@ bubblewrap build
           }`}
         >
           <Terminal className="w-4 h-4" />
-          <span>3. Google Bubblewrap CLI APK</span>
+          <span>4. Google Bubblewrap CLI APK</span>
         </button>
       </div>
 
@@ -314,7 +326,87 @@ bubblewrap build
         </div>
       )}
 
-      {/* TAB 2: Expo EAS Standalone APK */}
+      {/* TAB 2: Android Home Screen Widget */}
+      {activeTab === 'android_widget' && (
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-5">
+          <div className="pb-3 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 font-bold">
+                  Android 14 / 15 Native Home Screen Widget
+                </span>
+                <span className="text-xs text-slate-500">·</span>
+                <span className="text-xs text-slate-400">Jetpack Glance &amp; AppWidgetProvider</span>
+              </div>
+              <h3 className="text-base font-bold text-white mt-1 flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-emerald-400" />
+                <span>Future Purchase Tasks Android Widget ("Android Wetget")</span>
+              </h3>
+              <p className="text-xs text-slate-400">
+                Place interactive purchase tasks directly onto your Android phone or tablet home screen with 1-tap check-off, quantity units (No / Kg / Litre), target dates, and remarks.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+            <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 space-y-2">
+              <div className="flex items-center gap-2 text-emerald-400 font-bold">
+                <span className="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center font-mono text-[11px]">1</span>
+                <span>Long-Press Home Screen</span>
+              </div>
+              <p className="text-slate-400">
+                Press and hold any blank area on your Android home screen, then tap the <strong>"Widgets"</strong> menu item.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 space-y-2">
+              <div className="flex items-center gap-2 text-emerald-400 font-bold">
+                <span className="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center font-mono text-[11px]">2</span>
+                <span>Select SAS-AEIT</span>
+              </div>
+              <p className="text-slate-400">
+                Scroll to <strong>SAS-AEIT</strong> and select the <strong>Purchase Tasks Widget</strong>. Choose between 4×2 (List), 3×2 (Compact), or 2×2 (Glance).
+              </p>
+            </div>
+
+            <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 space-y-2">
+              <div className="flex items-center gap-2 text-emerald-400 font-bold">
+                <span className="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center font-mono text-[11px]">3</span>
+                <span>Instant 1-Tap Check-Off</span>
+              </div>
+              <p className="text-slate-400">
+                Tap the circle icon next to any item to mark it as purchased in real time. Quantities (No / Kg / Litre) and dates update automatically.
+              </p>
+            </div>
+          </div>
+
+          {/* Widget Features Strip */}
+          <div className="p-4 rounded-xl bg-emerald-950/20 border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+            <div className="space-y-1">
+              <strong className="text-emerald-300 font-semibold block">
+                Live Simulator Available in Module 8
+              </strong>
+              <p className="text-slate-300 text-[11px]">
+                You can also preview and interact with the live Material You Android Widget simulator inside Module 8 at any time.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => copyToClipboard(`// Android Jetpack Glance Widget: PurchaseTaskWidget.kt
+package com.saifahmed.sasaeit
+class PurchaseTaskWidget : GlanceAppWidget() { ... }`, 'widget_code')}
+                className="px-3 py-2 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold rounded-lg text-xs flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
+              >
+                {copiedSection === 'widget_code' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedSection === 'widget_code' ? 'Copied Kotlin!' : 'Copy Glance Kotlin'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: Expo EAS Standalone APK */}
       {activeTab === 'expo_eas' && (
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">

@@ -7,7 +7,7 @@
 import React, { useState, useMemo } from 'react';
 import {
   ResponsiveContainer,
-  AreaChart,
+  ComposedChart,
   Area,
   Line,
   XAxis,
@@ -325,7 +325,7 @@ export const SpendingTrendChart: React.FC<SpendingTrendChartProps> = ({ expenses
       {/* Main Recharts Line & Area Chart Container */}
       <div className="w-full h-72 sm:h-80 bg-slate-950/50 rounded-2xl p-2 sm:p-4 border border-slate-800/80">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+          <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
             <defs>
               <linearGradient id="expenseTrendGradient" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.35} />
@@ -381,7 +381,7 @@ export const SpendingTrendChart: React.FC<SpendingTrendChartProps> = ({ expenses
                 strokeDasharray="4 4"
               />
             )}
-          </AreaChart>
+          </ComposedChart>
         </ResponsiveContainer>
       </div>
 

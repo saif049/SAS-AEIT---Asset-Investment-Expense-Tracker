@@ -203,3 +203,146 @@ export interface EnrichedIncome extends Income {
   category_name?: string;
   subcategory_name?: string;
 }
+
+// ============================================================================
+// MODULE 8: FUTURE PURCHASE TASKS (ITEM, DATE, QUANTITY No/Kg/Litre, REMARKS)
+// ============================================================================
+
+export type PurchaseTaskUnit = 'No' | 'Kg' | 'Litre';
+export type PurchaseTaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+export type PurchaseTaskStatus = 'PENDING' | 'PURCHASED' | 'CANCELLED';
+
+export interface PurchaseTask {
+  id: number;
+  item_name: string;
+  category_id?: number | null;
+  subcategory_id?: number | null;
+  target_date: string; // YYYY-MM-DD
+  quantity: number;
+  unit: PurchaseTaskUnit; // 'No' | 'Kg' | 'Litre'
+  estimated_cost_bdt?: number | null;
+  actual_cost_bdt?: number | null;
+  priority: PurchaseTaskPriority;
+  status: PurchaseTaskStatus;
+  remarks?: string | null;
+  purchased_date?: string | null;
+  linked_expense_id?: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EnrichedPurchaseTask extends PurchaseTask {
+  category_name?: string;
+  subcategory_name?: string;
+  is_overdue?: boolean;
+  days_until_target?: number;
+}
+
+// ============================================================================
+// INDEPENDENT MODULE: DEVELOPMENT / REPAIR TASK
+// Isolation Rule: Completely standalone. Does not automatically read/write to
+// Finance, Accounting, Inventory, Procurement, Maintenance, or Projects.
+// ============================================================================
+
+export type DevTaskType = 'Development' | 'Repair';
+export type DevTaskPriority = 'Low' | 'Medium' | 'High' | 'Urgent';
+export type DevTaskStatus = 'Planned' | 'Ongoing' | 'Completed' | 'Suspended' | 'Cancelled';
+export type SourceOfFundStatus = 'Committed' | 'Received' | 'Pledged';
+export type DevTaskExpenseCategory =
+  | 'Materials'
+  | 'Labor'
+  | 'Equipment'
+  | 'Subcontractor'
+  | 'Permits/Fees'
+  | 'Miscellaneous';
+export type DevTaskPaymentStatus = 'Paid' | 'Pending' | 'Partial';
+
+export interface DevTaskAttachment {
+  id: string;
+  name: string;
+  type: string; // 'Photo' | 'Quotation' | 'Bill' | 'Contract' | 'Approval' | 'Other'
+  size_kb?: number;
+  uploaded_at: string;
+  url?: string;
+  notes?: string;
+}
+
+export interface DevRepairTask {
+  id: string; // e.g. "DRT-001"
+  name: string;
+  task_type: DevTaskType;
+  description: string;
+  location: string;
+  responsible_person: string;
+  contractor_vendor?: string;
+  priority: DevTaskPriority;
+  start_date: string; // YYYY-MM-DD
+  expected_completion: string; // YYYY-MM-DD
+  actual_completion?: string; // YYYY-MM-DD
+  status: DevTaskStatus;
+  initial_budget: number;
+  notes?: string;
+  attachments?: DevTaskAttachment[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DevTaskSourceOfFund {
+  id: string; // e.g. "SOF-001"
+  task_id: string;
+  source_name: string;
+  source_type: string;
+  amount: number;
+  date: string; // YYYY-MM-DD
+  reference_receipt_no?: string;
+  description?: string;
+  received_committed_by?: string;
+  status: SourceOfFundStatus;
+  attachment?: string;
+  remarks?: string;
+  created_at: string;
+}
+
+export interface DevTaskBudgetRevision {
+  id: string; // e.g. "REV-001"
+  task_id: string;
+  previous_budget: number;
+  modification_amount: number; // Positive or negative increment
+  revised_budget: number;
+  reason: string;
+  date: string; // YYYY-MM-DD
+  approved_by: string;
+  supporting_document?: string;
+  remarks?: string;
+  created_at: string;
+}
+
+export interface DevTaskExpense {
+  id: string; // e.g. "EXP-001"
+  task_id: string;
+  expense_item: string;
+  cost_category: DevTaskExpenseCategory;
+  amount: number;
+  date: string; // YYYY-MM-DD
+  voucher_bill_no?: string;
+  paid_to: string;
+  payment_status: DevTaskPaymentStatus;
+  attachment?: string;
+  remarks?: string;
+  created_at: string;
+}
+
+export interface DevTaskFinancialSummary {
+  taskId: string;
+  initialBudget: number;
+  latestRevisionBudget: number;
+  baseBudget: number;
+  accumulatedFund: number;
+  additionalAccumulatedFund: number;
+  effectiveBudget: number;
+  totalExpenses: number;
+  remainingBudget: number;
+  cashBalance: number;
+  burnRatePct: number;
+  fundingCoveragePct: number;
+}

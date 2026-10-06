@@ -24,6 +24,11 @@ import {
   RecurrenceFrequency,
   RecurringExpense,
   EnrichedRecurringExpense,
+  PurchaseTask,
+  EnrichedPurchaseTask,
+  PurchaseTaskUnit,
+  PurchaseTaskPriority,
+  PurchaseTaskStatus,
 } from '../types/database';
 import { MASTER_CATEGORIES_DATA } from './seedData';
 import { exportTransactionsToCSV } from '../utils/csvExportService';
@@ -43,6 +48,7 @@ export interface DatabaseState {
   savingsGoals: SavingsGoal[];
   budgetLimits: BudgetLimit[];
   recurringExpenses: RecurringExpense[];
+  purchaseTasks: PurchaseTask[];
   nextIds: {
     categories: number;
     subcategories: number;
@@ -56,6 +62,7 @@ export interface DatabaseState {
     savingsGoals: number;
     budgetLimits: number;
     recurringExpenses: number;
+    purchaseTasks: number;
   };
 }
 
@@ -88,6 +95,9 @@ class SQLiteDatabaseService {
             if (!parsed.recurringExpenses || parsed.recurringExpenses.length === 0) {
               parsed.recurringExpenses = this.buildInitialRecurringExpenses(parsed.categories || [], parsed.subcategories || []);
             }
+            if (!parsed.purchaseTasks || parsed.purchaseTasks.length === 0) {
+              parsed.purchaseTasks = this.buildInitialPurchaseTasks(parsed.categories || [], parsed.subcategories || []);
+            }
             if (!parsed.nextIds) {
               parsed.nextIds = {};
             }
@@ -99,6 +109,9 @@ class SQLiteDatabaseService {
             }
             if (!parsed.nextIds.recurringExpenses) {
               parsed.nextIds.recurringExpenses = 5;
+            }
+            if (!parsed.nextIds.purchaseTasks) {
+              parsed.nextIds.purchaseTasks = 10;
             }
 
             // Ensure Payee (Expense) and Payer (Income) categories exist in hydrated state
@@ -337,6 +350,25 @@ class SQLiteDatabaseService {
     });
 
     return newSub;
+  }
+
+  public async updateSubCategory(id: number, name: string): Promise<SubCategory> {
+    await this.initDatabase();
+    const sub = this.state!.subcategories.find((s) => s.id === id);
+    if (!sub) throw new Error('SubCategory not found');
+
+    const oldName = sub.name;
+    sub.name = name.trim();
+    this.persist();
+
+    // Audit Log
+    await this.logAuditEvent('EDIT', 'SUBCATEGORY', id, {
+      previous_name: oldName,
+      new_name: sub.name,
+      category_id: sub.category_id,
+    });
+
+    return sub;
   }
 
   public async toggleSubCategoryStatus(id: number): Promise<SubCategory> {
@@ -759,14 +791,14 @@ class SQLiteDatabaseService {
           try {
             const details = JSON.parse(inv.details_json);
             if (inv.type === 'STOCK') {
-              linked_investment_title = `${details.bo_id ? `BO #${details.bo_id}` : 'Stock Portfolio'} (${details.items?.length || 0} equities)`;
+              linked_investment_title = `${details.bo_id ? `BO #${details.bo_id}` : 'Stock Portfolio'} (${details.symbols?.length || details.items?.length || 0} equities)`;
               linked_investment_value = details.total_portfolio_value_bdt || 0;
             } else if (inv.type === 'FDR') {
               linked_investment_title = `${details.bank || 'Bank'} FDR #${details.instrument_no || ''}`;
-              linked_investment_value = details.principal || 0;
+              linked_investment_value = details.principal_bdt ?? details.principal ?? 0;
             } else if (inv.type === 'SAVINGS_CERTIFICATE') {
               linked_investment_title = `Govt Sanchayapatra #${details.instrument_no || ''}`;
-              linked_investment_value = details.principal || 0;
+              linked_investment_value = details.principal_bdt ?? details.principal ?? 0;
             } else if (inv.type === 'LAND') {
               linked_investment_title = `Land (${details.area_katha} Katha, ${details.location})`;
               linked_investment_value = details.current_estimated_value_bdt || details.purchase_price_bdt || 0;
@@ -915,7 +947,7 @@ class SQLiteDatabaseService {
       if (inv.type === 'STOCK') {
         synchedValue = details.total_portfolio_value_bdt || 0;
       } else if (inv.type === 'FDR' || inv.type === 'SAVINGS_CERTIFICATE') {
-        synchedValue = details.principal || 0;
+        synchedValue = details.principal_bdt ?? details.principal ?? 0;
       } else if (inv.type === 'LAND') {
         synchedValue = details.current_estimated_value_bdt || details.purchase_price_bdt || 0;
       }
@@ -1186,6 +1218,227 @@ class SQLiteDatabaseService {
   }
 
   // ==========================================
+  // MODULE 8: FUTURE PURCHASE TASKS ENGINE
+  // Multi-item planner with quantity (No/Kg/Litre),
+  // target dates, remarks & Android widget integration
+  // ==========================================
+
+  public async getPurchaseTasks(status?: 'ALL' | PurchaseTaskStatus): Promise<EnrichedPurchaseTask[]> {
+    await this.initDatabase();
+    const tasks = this.state!.purchaseTasks || [];
+    const catMap = new Map((this.state!.categories || []).map((c) => [c.id, c.name]));
+    const subMap = new Map((this.state!.subcategories || []).map((s) => [s.id, s.name]));
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const todayMs = new Date(todayStr).getTime();
+
+    const enriched: EnrichedPurchaseTask[] = tasks.map((t) => {
+      const targetMs = new Date(t.target_date).getTime();
+      const diffDays = Math.round((targetMs - todayMs) / (1000 * 60 * 60 * 24));
+      const is_overdue = t.status === 'PENDING' && diffDays < 0;
+
+      return {
+        ...t,
+        category_name: t.category_id ? catMap.get(t.category_id) || 'General' : undefined,
+        subcategory_name: t.subcategory_id ? subMap.get(t.subcategory_id) || 'General' : undefined,
+        is_overdue,
+        days_until_target: diffDays,
+      };
+    });
+
+    let filtered = enriched;
+    if (status && status !== 'ALL') {
+      filtered = filtered.filter((t) => t.status === status);
+    }
+
+    // Sort: PENDING first (ordered by target_date ascending), then completed/cancelled
+    return filtered.sort((a, b) => {
+      if (a.status === 'PENDING' && b.status !== 'PENDING') return -1;
+      if (a.status !== 'PENDING' && b.status === 'PENDING') return 1;
+      return a.target_date.localeCompare(b.target_date);
+    });
+  }
+
+  public async addPurchaseTask(params: {
+    item_name: string;
+    category_id?: number | null;
+    subcategory_id?: number | null;
+    target_date: string;
+    quantity: number;
+    unit: PurchaseTaskUnit;
+    estimated_cost_bdt?: number | null;
+    priority?: PurchaseTaskPriority;
+    remarks?: string | null;
+  }): Promise<PurchaseTask> {
+    await this.initDatabase();
+    if (!this.state!.purchaseTasks) this.state!.purchaseTasks = [];
+    if (!this.state!.nextIds.purchaseTasks) this.state!.nextIds.purchaseTasks = 1;
+
+    if (!params.item_name || !params.item_name.trim()) {
+      throw new Error('Item name is required for purchase task.');
+    }
+    if (!params.target_date) {
+      throw new Error('Target purchase date is required.');
+    }
+    if (params.quantity <= 0) {
+      throw new Error('Quantity must be greater than zero.');
+    }
+
+    const newTask: PurchaseTask = {
+      id: this.state!.nextIds.purchaseTasks++,
+      item_name: params.item_name.trim(),
+      category_id: params.category_id || null,
+      subcategory_id: params.subcategory_id || null,
+      target_date: params.target_date,
+      quantity: Number(params.quantity),
+      unit: params.unit || 'No',
+      estimated_cost_bdt: params.estimated_cost_bdt ? Number(params.estimated_cost_bdt) : null,
+      actual_cost_bdt: null,
+      priority: params.priority || 'MEDIUM',
+      status: 'PENDING',
+      remarks: params.remarks?.trim() || null,
+      purchased_date: null,
+      linked_expense_id: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    this.state!.purchaseTasks.unshift(newTask);
+    this.persist();
+
+    await this.logAuditEvent('CREATE', 'PURCHASE_TASK', newTask.id, {
+      item_name: newTask.item_name,
+      quantity: `${newTask.quantity} ${newTask.unit}`,
+      target_date: newTask.target_date,
+      estimated_cost_bdt: newTask.estimated_cost_bdt,
+      remarks: newTask.remarks,
+    });
+
+    return newTask;
+  }
+
+  public async updatePurchaseTask(id: number, updates: Partial<PurchaseTask>): Promise<PurchaseTask> {
+    await this.initDatabase();
+    const task = (this.state!.purchaseTasks || []).find((t) => t.id === id);
+    if (!task) throw new Error('Purchase task not found');
+
+    if (updates.item_name !== undefined) task.item_name = updates.item_name.trim();
+    if (updates.category_id !== undefined) task.category_id = updates.category_id;
+    if (updates.subcategory_id !== undefined) task.subcategory_id = updates.subcategory_id;
+    if (updates.target_date !== undefined) task.target_date = updates.target_date;
+    if (updates.quantity !== undefined) task.quantity = Number(updates.quantity);
+    if (updates.unit !== undefined) task.unit = updates.unit;
+    if (updates.estimated_cost_bdt !== undefined) task.estimated_cost_bdt = updates.estimated_cost_bdt;
+    if (updates.actual_cost_bdt !== undefined) task.actual_cost_bdt = updates.actual_cost_bdt;
+    if (updates.priority !== undefined) task.priority = updates.priority;
+    if (updates.status !== undefined) task.status = updates.status;
+    if (updates.remarks !== undefined) task.remarks = updates.remarks ? updates.remarks.trim() : null;
+    if (updates.purchased_date !== undefined) task.purchased_date = updates.purchased_date;
+
+    task.updated_at = new Date().toISOString();
+    this.persist();
+
+    await this.logAuditEvent('EDIT', 'PURCHASE_TASK', id, {
+      item_name: task.item_name,
+      updated_fields: Object.keys(updates),
+      status: task.status,
+    });
+
+    return task;
+  }
+
+  public async togglePurchaseTaskStatus(id: number): Promise<PurchaseTask> {
+    await this.initDatabase();
+    const task = (this.state!.purchaseTasks || []).find((t) => t.id === id);
+    if (!task) throw new Error('Purchase task not found');
+
+    if (task.status === 'PENDING') {
+      task.status = 'PURCHASED';
+      task.purchased_date = new Date().toISOString().split('T')[0];
+    } else {
+      task.status = 'PENDING';
+      task.purchased_date = null;
+    }
+
+    task.updated_at = new Date().toISOString();
+    this.persist();
+
+    await this.logAuditEvent('STATUS_TOGGLE', 'PURCHASE_TASK', id, {
+      item_name: task.item_name,
+      new_status: task.status,
+    });
+
+    return task;
+  }
+
+  public async completePurchaseTask(
+    id: number,
+    actual_cost_bdt?: number,
+    createExpenseRecord = false,
+    category_id?: number,
+    subcategory_id?: number
+  ): Promise<{ task: PurchaseTask; expense?: Expense }> {
+    await this.initDatabase();
+    const task = (this.state!.purchaseTasks || []).find((t) => t.id === id);
+    if (!task) throw new Error('Purchase task not found');
+
+    task.status = 'PURCHASED';
+    task.purchased_date = new Date().toISOString().split('T')[0];
+    if (actual_cost_bdt !== undefined && actual_cost_bdt !== null) {
+      task.actual_cost_bdt = Number(actual_cost_bdt);
+    } else if (task.estimated_cost_bdt) {
+      task.actual_cost_bdt = task.estimated_cost_bdt;
+    }
+
+    let createdExpense: Expense | undefined = undefined;
+
+    // Optional seamless conversion into a formal SQLite Expense record
+    if (createExpenseRecord && task.actual_cost_bdt && task.actual_cost_bdt > 0) {
+      const catId = category_id || task.category_id || (this.state!.categories.find((c) => c.type === 'EXPENSE')?.id || 1);
+      const subId = subcategory_id || task.subcategory_id || (this.state!.subcategories.find((s) => s.category_id === catId)?.id || 1);
+
+      createdExpense = await this.insertExpense({
+        date: task.purchased_date,
+        amount_bdt: task.actual_cost_bdt,
+        category_id: catId,
+        subcategory_id: subId,
+        expense_type: 'DIRECT',
+        remarks: `[Purchase Task Completed] ${task.item_name} (${task.quantity} ${task.unit})${task.remarks ? ` - ${task.remarks}` : ''}`,
+      });
+
+      task.linked_expense_id = createdExpense.id;
+    }
+
+    task.updated_at = new Date().toISOString();
+    this.persist();
+
+    await this.logAuditEvent('EDIT', 'PURCHASE_TASK', id, {
+      action: 'COMPLETE_PURCHASE',
+      item_name: task.item_name,
+      actual_cost_bdt: task.actual_cost_bdt,
+      created_expense_id: createdExpense?.id || null,
+    });
+
+    return { task, expense: createdExpense };
+  }
+
+  public async deletePurchaseTask(id: number): Promise<boolean> {
+    await this.initDatabase();
+    const idx = (this.state!.purchaseTasks || []).findIndex((t) => t.id === id);
+    if (idx === -1) return false;
+
+    const removed = this.state!.purchaseTasks.splice(idx, 1)[0];
+    this.persist();
+
+    await this.logAuditEvent('DELETE', 'PURCHASE_TASK', id, {
+      item_name: removed.item_name,
+      quantity: `${removed.quantity} ${removed.unit}`,
+    });
+
+    return true;
+  }
+
+  // ==========================================
   // SYSTEM AUDIT LOGS QUERY
   // ==========================================
 
@@ -1249,6 +1502,39 @@ class SQLiteDatabaseService {
       if (!parsed.categories || !parsed.systemLogs) {
         throw new Error('Invalid SAS-AEIT database backup structure');
       }
+      if (!parsed.purchaseTasks) {
+        parsed.purchaseTasks = [];
+      }
+      if (!parsed.savingsGoals) {
+        parsed.savingsGoals = [];
+      }
+      if (!parsed.budgetLimits) {
+        parsed.budgetLimits = [];
+      }
+      if (!parsed.recurringExpenses) {
+        parsed.recurringExpenses = [];
+      }
+      if (!parsed.nextIds) {
+        parsed.nextIds = {
+          expenses: 100,
+          incomes: 100,
+          categories: 50,
+          subcategories: 100,
+          systemLogs: 100,
+          investments: 50,
+          properties: 50,
+          vehicles: 50,
+          fuelLogs: 50,
+          savingsGoals: 10,
+          budgetLimits: 20,
+          recurringExpenses: 10,
+          purchaseTasks: 10,
+        };
+      } else if (!parsed.nextIds.purchaseTasks) {
+        parsed.nextIds.purchaseTasks = parsed.purchaseTasks.length
+          ? Math.max(...parsed.purchaseTasks.map((t) => t.id)) + 1
+          : 1;
+      }
       this.state = parsed;
       this.persist();
       await this.logAuditEvent('EDIT', 'DATABASE', 0, {
@@ -1268,6 +1554,101 @@ class SQLiteDatabaseService {
     await this.logAuditEvent('CREATE', 'DATABASE', 0, {
       operation: 'DATABASE_RESET_TO_INITIAL_MASTER_DATA',
     });
+  }
+
+  public async cleanTemporaryDataForDeployment(): Promise<void> {
+    await this.initDatabase();
+
+    // Preserve the comprehensive master category & subcategory hierarchy
+    let categories: Category[] = [];
+    let subcategories: SubCategory[] = [];
+
+    if (this.state?.categories && this.state.categories.length > 0) {
+      categories = this.state.categories;
+      subcategories = this.state.subcategories || [];
+    } else {
+      let catId = 1;
+      let subCatId = 1;
+      MASTER_CATEGORIES_DATA.forEach((catSeed) => {
+        const currentCatId = catId++;
+        categories.push({
+          id: currentCatId,
+          type: catSeed.type,
+          name: catSeed.name,
+          is_active: 1,
+        });
+
+        catSeed.subcategories.forEach((subName) => {
+          subcategories.push({
+            id: subCatId++,
+            category_id: currentCatId,
+            name: subName,
+            is_active: 1,
+          });
+        });
+      });
+    }
+
+    const maxCatId = categories.length > 0 ? Math.max(...categories.map((c) => c.id)) + 1 : 1;
+    const maxSubId = subcategories.length > 0 ? Math.max(...subcategories.map((s) => s.id)) + 1 : 1;
+
+    // Reset database to pristine state ready for deployment
+    this.state = {
+      categories,
+      subcategories,
+      systemLogs: [
+        {
+          id: 1,
+          timestamp: new Date().toISOString(),
+          action: 'CREATE',
+          entity_type: 'DATABASE',
+          entity_id: 1,
+          details_json: JSON.stringify({
+            operation: 'DEPLOYMENT_CLEAN_INITIALIZED',
+            message: 'All temporary demo data cleared for clean production deployment.',
+            categories_count: categories.length,
+            subcategories_count: subcategories.length,
+            timestamp: new Date().toISOString(),
+          }),
+        },
+      ],
+      incomes: [],
+      expenses: [],
+      investments: [],
+      properties: [],
+      vehicles: [],
+      fuelLogs: [],
+      savingsGoals: [],
+      budgetLimits: [],
+      recurringExpenses: [],
+      purchaseTasks: [],
+      nextIds: {
+        categories: maxCatId,
+        subcategories: maxSubId,
+        systemLogs: 2,
+        incomes: 1,
+        expenses: 1,
+        investments: 1,
+        properties: 1,
+        vehicles: 1,
+        fuelLogs: 1,
+        savingsGoals: 1,
+        budgetLimits: 1,
+        recurringExpenses: 1,
+        purchaseTasks: 1,
+      },
+    };
+
+    this.persist();
+
+    // Clean DevRepairTasks storage key if present in browser localStorage
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem('sas_aeit_dev_repair_tasks_v1');
+      }
+    } catch {
+      // ignore in environments without localStorage
+    }
   }
 
   public getDatabaseSummary() {
@@ -1296,6 +1677,8 @@ class SQLiteDatabaseService {
       vehiclesCount: this.state.vehicles.length,
       savingsGoalsCount: this.state.savingsGoals?.length || 0,
       budgetLimitsCount: this.state.budgetLimits?.length || 0,
+      purchaseTasksCount: this.state.purchaseTasks?.length || 0,
+      pendingPurchaseTasksCount: (this.state.purchaseTasks || []).filter((p) => p.status === 'PENDING').length,
     };
   }
 
@@ -1718,6 +2101,7 @@ class SQLiteDatabaseService {
     const savingsGoals = this.buildInitialSavingsGoals(investments);
     const budgetLimits = this.buildInitialBudgetLimits(categories);
     const recurringExpenses = this.buildInitialRecurringExpenses(categories, subcategories);
+    const purchaseTasks = this.buildInitialPurchaseTasks(categories, subcategories);
 
     return {
       categories,
@@ -1732,6 +2116,7 @@ class SQLiteDatabaseService {
       savingsGoals,
       budgetLimits,
       recurringExpenses,
+      purchaseTasks,
       nextIds: {
         categories: catId,
         subcategories: subCatId,
@@ -1745,6 +2130,7 @@ class SQLiteDatabaseService {
         savingsGoals: 5,
         budgetLimits: 15,
         recurringExpenses: 5,
+        purchaseTasks: 9,
       },
     };
   }
@@ -1908,6 +2294,167 @@ class SQLiteDatabaseService {
         is_active: 1,
         remarks: 'BRTA annual fitness certificate and road tax token for Axio',
         created_at: '2026-01-15T10:00:00.000Z',
+      },
+    ];
+  }
+
+  private buildInitialPurchaseTasks(categories: Category[], subcategories: SubCategory[]): PurchaseTask[] {
+    const foodCat = categories.find((c) => c.name === 'Food');
+    const fishCat = categories.find((c) => c.name === 'Fish');
+    const meatCat = categories.find((c) => c.name === 'Meat');
+    const transCat = categories.find((c) => c.name === 'Transportation & Commuting');
+    const utilCat = categories.find((c) => c.name === 'Utilities');
+
+    const riceSub = subcategories.find((s) => s.name.toLowerCase().includes('rice') || s.name.toLowerCase().includes('staple'));
+    const ilishSub = subcategories.find((s) => s.name.toLowerCase().includes('ilish'));
+    const beefSub = subcategories.find((s) => s.name.toLowerCase().includes('beef'));
+    const fuelSub = subcategories.find((s) => s.name.toLowerCase().includes('fuel'));
+    const electSub = subcategories.find((s) => s.name.toLowerCase().includes('electric'));
+
+    return [
+      {
+        id: 1,
+        item_name: 'Basmati Kalijira Rice (Aromatic)',
+        category_id: foodCat?.id || null,
+        subcategory_id: riceSub?.id || null,
+        target_date: '2026-10-10',
+        quantity: 25,
+        unit: 'Kg',
+        estimated_cost_bdt: 2750,
+        actual_cost_bdt: null,
+        priority: 'HIGH',
+        status: 'PENDING',
+        remarks: 'Monthly aromatic rice refill from wholesale merchant',
+        purchased_date: null,
+        linked_expense_id: null,
+        created_at: '2026-10-01T08:00:00.000Z',
+        updated_at: '2026-10-01T08:00:00.000Z',
+      },
+      {
+        id: 2,
+        item_name: 'Pure Mustard Oil (Ghani Vanga)',
+        category_id: foodCat?.id || null,
+        subcategory_id: null,
+        target_date: '2026-10-12',
+        quantity: 5,
+        unit: 'Litre',
+        estimated_cost_bdt: 1400,
+        actual_cost_bdt: null,
+        priority: 'MEDIUM',
+        status: 'PENDING',
+        remarks: 'Cold pressed mustard oil 5L jar for cooking',
+        purchased_date: null,
+        linked_expense_id: null,
+        created_at: '2026-10-01T09:30:00.000Z',
+        updated_at: '2026-10-01T09:30:00.000Z',
+      },
+      {
+        id: 3,
+        item_name: 'LED Tube Light 20W DayLight',
+        category_id: utilCat?.id || null,
+        subcategory_id: electSub?.id || null,
+        target_date: '2026-10-08',
+        quantity: 4,
+        unit: 'No',
+        estimated_cost_bdt: 1200,
+        actual_cost_bdt: null,
+        priority: 'HIGH',
+        status: 'PENDING',
+        remarks: 'Guest room and kitchen fixture replacements',
+        purchased_date: null,
+        linked_expense_id: null,
+        created_at: '2026-10-02T10:15:00.000Z',
+        updated_at: '2026-10-02T10:15:00.000Z',
+      },
+      {
+        id: 4,
+        item_name: 'Fresh Padma Ilish (1.2kg+ size)',
+        category_id: fishCat?.id || null,
+        subcategory_id: ilishSub?.id || null,
+        target_date: '2026-10-09',
+        quantity: 3,
+        unit: 'No',
+        estimated_cost_bdt: 5400,
+        actual_cost_bdt: null,
+        priority: 'HIGH',
+        status: 'PENDING',
+        remarks: 'Karwan Bazar fresh consignment for family weekend',
+        purchased_date: null,
+        linked_expense_id: null,
+        created_at: '2026-10-03T11:00:00.000Z',
+        updated_at: '2026-10-03T11:00:00.000Z',
+      },
+      {
+        id: 5,
+        item_name: 'Car Synthetic Engine Oil 5W-30',
+        category_id: transCat?.id || null,
+        subcategory_id: fuelSub?.id || null,
+        target_date: '2026-10-18',
+        quantity: 4,
+        unit: 'Litre',
+        estimated_cost_bdt: 3800,
+        actual_cost_bdt: null,
+        priority: 'MEDIUM',
+        status: 'PENDING',
+        remarks: 'Axio routine 50,000 km engine maintenance flush',
+        purchased_date: null,
+        linked_expense_id: null,
+        created_at: '2026-10-03T14:30:00.000Z',
+        updated_at: '2026-10-03T14:30:00.000Z',
+      },
+      {
+        id: 6,
+        item_name: 'A4 80GSM Photocopy Paper Reams',
+        category_id: null,
+        subcategory_id: null,
+        target_date: '2026-10-15',
+        quantity: 5,
+        unit: 'No',
+        estimated_cost_bdt: 2250,
+        actual_cost_bdt: null,
+        priority: 'LOW',
+        status: 'PENDING',
+        remarks: 'Double-A paper reams for official documentation',
+        purchased_date: null,
+        linked_expense_id: null,
+        created_at: '2026-10-04T07:45:00.000Z',
+        updated_at: '2026-10-04T07:45:00.000Z',
+      },
+      {
+        id: 7,
+        item_name: 'Fresh Farm Milk (Full Cream)',
+        category_id: foodCat?.id || null,
+        subcategory_id: null,
+        target_date: '2026-10-07',
+        quantity: 6,
+        unit: 'Litre',
+        estimated_cost_bdt: 600,
+        actual_cost_bdt: null,
+        priority: 'URGENT',
+        status: 'PENDING',
+        remarks: 'Weekly dairy supply from Aarong pasteurized outlet',
+        purchased_date: null,
+        linked_expense_id: null,
+        created_at: '2026-10-05T06:30:00.000Z',
+        updated_at: '2026-10-05T06:30:00.000Z',
+      },
+      {
+        id: 8,
+        item_name: 'Premium Beef Gorur Mangsho',
+        category_id: meatCat?.id || null,
+        subcategory_id: beefSub?.id || null,
+        target_date: '2026-10-05',
+        quantity: 3.5,
+        unit: 'Kg',
+        estimated_cost_bdt: 2800,
+        actual_cost_bdt: 2700,
+        priority: 'HIGH',
+        status: 'PURCHASED',
+        remarks: 'Purchased fresh bone-in cuts for family lunch',
+        purchased_date: '2026-10-05',
+        linked_expense_id: null,
+        created_at: '2026-10-04T08:00:00.000Z',
+        updated_at: '2026-10-05T12:00:00.000Z',
       },
     ];
   }

@@ -45,6 +45,8 @@ export const CategoryAuditManager: React.FC<CategoryAuditManagerProps> = ({
   const [newSubName, setNewSubName] = useState('');
   const [editingCatId, setEditingCatId] = useState<number | null>(null);
   const [editCatName, setEditCatName] = useState('');
+  const [editingSubId, setEditingSubId] = useState<number | null>(null);
+  const [editSubName, setEditSubName] = useState('');
 
   // Status message
   const [banner, setBanner] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -103,6 +105,18 @@ export const CategoryAuditManager: React.FC<CategoryAuditManagerProps> = ({
       onRefresh();
     } catch (err: unknown) {
       showBanner('error', err instanceof Error ? err.message : 'Failed to update category');
+    }
+  };
+
+  const handleSaveEditSubCategory = async (id: number) => {
+    if (!editSubName.trim()) return;
+    try {
+      const updated = await sqliteService.updateSubCategory(id, editSubName.trim());
+      showBanner('success', `Subcategory renamed to "${updated.name}" (SystemLogs recorded).`);
+      setEditingSubId(null);
+      onRefresh();
+    } catch (err: unknown) {
+      showBanner('error', err instanceof Error ? err.message : 'Failed to update subcategory');
     }
   };
 
@@ -388,34 +402,78 @@ export const CategoryAuditManager: React.FC<CategoryAuditManagerProps> = ({
                     No sub-categories defined yet for this category.
                   </p>
                 ) : (
-                  activeSubcategories.map((sub) => (
-                    <div
-                      key={sub.id}
-                      className="flex items-center justify-between p-2.5 rounded-lg bg-slate-950/60 border border-slate-800 text-xs hover:border-slate-700 transition-colors"
-                    >
-                      <span
-                        className={
-                          sub.is_active === 1
-                            ? 'text-slate-200 font-medium'
-                            : 'text-slate-500 line-through'
-                        }
+                  activeSubcategories.map((sub) => {
+                    const isEditingThisSub = editingSubId === sub.id;
+                    return (
+                      <div
+                        key={sub.id}
+                        className="flex items-center justify-between p-2.5 rounded-lg bg-slate-950/60 border border-slate-800 text-xs hover:border-slate-700 transition-colors"
                       >
-                        {sub.name}
-                      </span>
-
-                      <button
-                        title={sub.is_active === 1 ? 'Deactivate' : 'Activate'}
-                        onClick={() => handleToggleSubCategoryStatus(sub)}
-                        className="p-1 rounded transition-colors"
-                      >
-                        {sub.is_active === 1 ? (
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 hover:text-rose-400" />
+                        {isEditingThisSub ? (
+                          <div className="flex items-center gap-1.5 flex-1 mr-2">
+                            <input
+                              type="text"
+                              value={editSubName}
+                              onChange={(e) => setEditSubName(e.target.value)}
+                              className="bg-slate-900 border border-slate-700 text-xs text-slate-100 rounded px-2 py-1 flex-1 focus:outline-none focus:border-emerald-500"
+                              autoFocus
+                            />
+                            <button
+                              onClick={() => handleSaveEditSubCategory(sub.id)}
+                              className="p-1 rounded bg-emerald-500 text-slate-950 hover:bg-emerald-400 cursor-pointer"
+                              title="Save subcategory"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => setEditingSubId(null)}
+                              className="p-1 rounded bg-slate-800 text-slate-400 hover:text-slate-200 cursor-pointer"
+                              title="Cancel"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         ) : (
-                          <XCircle className="w-3.5 h-3.5 text-slate-500 hover:text-emerald-400" />
+                          <span
+                            className={
+                              sub.is_active === 1
+                                ? 'text-slate-200 font-medium'
+                                : 'text-slate-500 line-through'
+                            }
+                          >
+                            {sub.name}
+                          </span>
                         )}
-                      </button>
-                    </div>
-                  ))
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          {!isEditingThisSub && (
+                            <button
+                              title="Rename SubCategory"
+                              onClick={() => {
+                                setEditingSubId(sub.id);
+                                setEditSubName(sub.name);
+                              }}
+                              className="p-1 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors cursor-pointer"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+
+                          <button
+                            title={sub.is_active === 1 ? 'Deactivate' : 'Activate'}
+                            onClick={() => handleToggleSubCategoryStatus(sub)}
+                            className="p-1 rounded transition-colors cursor-pointer"
+                          >
+                            {sub.is_active === 1 ? (
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 hover:text-rose-400" />
+                            ) : (
+                              <XCircle className="w-3.5 h-3.5 text-slate-500 hover:text-emerald-400" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
                 )}
               </div>
             </div>

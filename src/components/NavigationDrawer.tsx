@@ -21,6 +21,8 @@ import {
   CheckCircle2,
   Target,
   Smartphone,
+  Wrench,
+  ShoppingBag,
 } from 'lucide-react';
 import { NavigationScreen } from '../store/useAppStore';
 import { usePWAInstall } from '../hooks/usePWAInstall';
@@ -36,6 +38,8 @@ interface NavigationDrawerProps {
     expensesCount: number;
     incomesCount: number;
     systemLogsCount: number;
+    purchaseTasksCount?: number;
+    pendingPurchaseTasksCount?: number;
   };
   deviceInfo?: DeviceInfo;
   onOpenDeviceFitModal?: () => void;
@@ -58,6 +62,21 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
       label: 'Dashboard Overview',
       subtitle: 'Module 5 · Cards A–H & Metrics',
       icon: LayoutDashboard,
+    },
+    {
+      id: 'purchase_tasks' as NavigationScreen,
+      label: 'Purchase Tasks & Planner',
+      subtitle: 'Module 8 · Item, Date, Qty (No/Kg/L), Android Widget',
+      icon: ShoppingBag,
+      highlight: true,
+      badge: summary.pendingPurchaseTasksCount,
+    },
+    {
+      id: 'development_repair' as NavigationScreen,
+      label: 'Development / Repair Task',
+      subtitle: 'Module 7 · Standalone Task Engine',
+      icon: Wrench,
+      highlight: true,
     },
     {
       id: 'savings_goals' as NavigationScreen,

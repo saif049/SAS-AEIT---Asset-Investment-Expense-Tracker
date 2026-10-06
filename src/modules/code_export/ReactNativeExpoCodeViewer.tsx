@@ -8,7 +8,7 @@ import React, { useState } from 'react';
 import { Code2, Copy, Check, Terminal, Smartphone } from 'lucide-react';
 
 export const ReactNativeExpoCodeViewer: React.FC = () => {
-  const [selectedModule, setSelectedModule] = useState<'module3_entry' | 'sqlite_middleware' | 'schema' | 'drawer_nav'>('module3_entry');
+  const [selectedModule, setSelectedModule] = useState<'module3_entry' | 'purchase_widget' | 'sqlite_middleware' | 'schema' | 'drawer_nav'>('purchase_widget');
   const [copied, setCopied] = useState(false);
 
   const codeSnippets: Record<string, { title: string; filename: string; code: string }> = {
@@ -439,6 +439,198 @@ export function RootDrawerNavigator() {
   );
 }`,
     },
+    purchase_widget: {
+      title: 'Module 8: Purchase Tasks & Android Home Screen Glance Widget (Kotlin / Expo)',
+      filename: 'android/PurchaseTaskWidget.kt & components/PurchaseTasksPlanner.tsx',
+      code: `// ============================================================================
+// PART 1: Android Jetpack Glance Home Screen Widget (Kotlin)
+// File: android/app/src/main/java/com/saifahmed/sasaeit/PurchaseTaskWidget.kt
+// ============================================================================
+package com.saifahmed.sasaeit
+
+import android.content.Context
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.glance.*
+import androidx.glance.action.clickable
+import androidx.glance.appwidget.*
+import androidx.glance.layout.*
+import androidx.glance.text.*
+import androidx.glance.unit.ColorProvider
+import androidx.compose.ui.graphics.Color
+
+data class GlancePurchaseItem(
+    val id: Int,
+    val itemName: String,
+    val targetDate: String,
+    val quantity: Double,
+    val unit: String, // "No", "Kg", "Litre"
+    val remarks: String?,
+    val isPurchased: Boolean
+)
+
+class PurchaseTaskWidget : GlanceAppWidget() {
+    override suspend fun provideGlance(context: Context, id: GlanceId) {
+        // Query pending purchase tasks directly from SQLite database
+        val tasks = getPendingPurchasesFromSQLite(context)
+
+        provideContent {
+            GlanceTheme {
+                WidgetContent(tasks)
+            }
+        }
+    }
+
+    @Composable
+    private fun WidgetContent(tasks: List<GlancePurchaseItem>) {
+        Column(
+            modifier = GlanceModifier
+                .fillMaxSize()
+                .background(Color(0xFF0F172A))
+                .padding(12.dp)
+                .cornerRadius(24.dp)
+        ) {
+            // Widget Title Bar
+            Row(
+                modifier = GlanceModifier.fillMaxWidth().padding(bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "🛒 Future Purchases",
+                    style = TextStyle(
+                        color = ColorProvider(Color.White),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold
+                    ),
+                    modifier = GlanceModifier.defaultWeight()
+                )
+                Text(
+                    text = "\${tasks.size} pending",
+                    style = TextStyle(
+                        color = ColorProvider(Color(0xFF10B981)),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                )
+            }
+
+            // Task List Items (Item, Date, Quantity No/Kg/Litre, Remarks)
+            LazyColumn(modifier = GlanceModifier.fillMaxSize()) {
+                items(tasks) { task ->
+                    Row(
+                        modifier = GlanceModifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                            .background(Color(0xFF1E293B))
+                            .padding(8.dp)
+                            .cornerRadius(12.dp)
+                            .clickable {
+                                // 1-tap check-off directly from Android home screen widget!
+                                togglePurchaseStatus(task.id)
+                            },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (task.isPurchased) "✓" else "○",
+                            style = TextStyle(
+                                color = ColorProvider(if (task.isPurchased) Color(0xFF10B981) else Color(0xFF94A3B8)),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            ),
+                            modifier = GlanceModifier.padding(end = 8.dp)
+                        )
+                        Column(modifier = GlanceModifier.defaultWeight()) {
+                            Text(
+                                text = task.itemName,
+                                style = TextStyle(
+                                    color = ColorProvider(Color.White),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            )
+                            Text(
+                                text = "Due: \${task.targetDate}\${if (!task.remarks.isNullOrEmpty()) " · " + task.remarks else ""}",
+                                style = TextStyle(
+                                    color = ColorProvider(Color(0xFF94A3B8)),
+                                    fontSize = 10.sp
+                                )
+                            )
+                        }
+                        // Unit badge: No / Kg / Litre
+                        Text(
+                            text = "\${task.quantity} \${task.unit}",
+                            style = TextStyle(
+                                color = ColorProvider(Color(0xFF10B981)),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ============================================================================
+// PART 2: Expo + SQLite Purchase Task TypeScript Component
+// File: components/PurchaseTasksPlanner.tsx
+// ============================================================================
+import React, { useState, useEffect } from 'react';
+import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet } from 'react-native';
+import * as SQLite from 'expo-sqlite';
+
+const db = SQLite.openDatabaseSync('sas_aiet.db');
+
+export interface PurchaseTask {
+  id: number;
+  item_name: string;
+  target_date: string;
+  quantity: number;
+  unit: 'No' | 'Kg' | 'Litre';
+  remarks?: string;
+  status: 'PENDING' | 'PURCHASED';
+}
+
+export const PurchaseTasksPlanner: React.FC = () => {
+  const [tasks, setTasks] = useState<PurchaseTask[]>([]);
+  const [itemName, setItemName] = useState('');
+  const [quantity, setQuantity] = useState('1');
+  const [unit, setUnit] = useState<'No' | 'Kg' | 'Litre'>('No');
+  const [remarks, setRemarks] = useState('');
+
+  const loadTasks = () => {
+    const rows = db.getAllSync<PurchaseTask>(
+      'SELECT * FROM PurchaseTasks ORDER BY status ASC, target_date ASC'
+    );
+    setTasks(rows);
+  };
+
+  useEffect(() => { loadTasks(); }, []);
+
+  const addTask = () => {
+    if (!itemName.trim()) return;
+    db.runSync(
+      \`INSERT INTO PurchaseTasks (item_name, target_date, quantity, unit, status, remarks, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'PENDING', ?, datetime('now'), datetime('now'))\`,
+      [itemName.trim(), new Date().toISOString().split('T')[0], parseFloat(quantity) || 1, unit, remarks.trim()]
+    );
+    setItemName('');
+    setRemarks('');
+    loadTasks();
+  };
+
+  return (
+    <View style={{ flex: 1, padding: 16, backgroundColor: '#020617' }}>
+      <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold', marginBottom: 12 }}>
+        Module 8: Future Purchase Tasks
+      </Text>
+      {/* Task input and flat list */}
+    </View>
+  );
+};`,
+    },
   };
 
   const current = codeSnippets[selectedModule];
@@ -474,6 +666,16 @@ export function RootDrawerNavigator() {
 
       {/* Selector Tabs */}
       <div className="flex flex-wrap gap-2">
+        <button
+          onClick={() => setSelectedModule('purchase_widget')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 ${
+            selectedModule === 'purchase_widget'
+              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+              : 'bg-slate-900 text-slate-400 border border-slate-800 hover:text-slate-200'
+          }`}
+        >
+          <span>Module 8: Purchase Tasks &amp; Android Widget</span>
+        </button>
         <button
           onClick={() => setSelectedModule('module3_entry')}
           className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${

@@ -48,6 +48,8 @@ export const BackupRestoreManager: React.FC<BackupRestoreManagerProps> = ({
   } | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [showCleanDeploymentModal, setShowCleanDeploymentModal] = useState(false);
 
   // Accounting / Tax Export State
   const [taxFiscalYear, setTaxFiscalYear] = useState<string>('ALL');
@@ -547,11 +549,26 @@ export const BackupRestoreManager: React.FC<BackupRestoreManagerProps> = ({
   };
 
   const handleResetToSeeds = async () => {
-    if (confirm('Are you sure you want to restore initial master categories and seed records?')) {
+    setShowResetModal(false);
+    try {
       await sqliteService.resetToSeedData();
       showStatus('success', 'Database reset to initial master schema & seed data.');
       await loadLedgerData();
       onDatabaseRestored();
+    } catch (err: unknown) {
+      showStatus('error', err instanceof Error ? err.message : 'Database reset failed');
+    }
+  };
+
+  const handleCleanDeployment = async () => {
+    setShowCleanDeploymentModal(false);
+    try {
+      await sqliteService.cleanTemporaryDataForDeployment();
+      showStatus('success', 'All temporary and demo data cleared. Master database is pristine and ready for deployment.');
+      await loadLedgerData();
+      onDatabaseRestored();
+    } catch (err: unknown) {
+      showStatus('error', err instanceof Error ? err.message : 'Clean deployment failed');
     }
   };
 
@@ -854,7 +871,7 @@ export const BackupRestoreManager: React.FC<BackupRestoreManagerProps> = ({
               </div>
               <p className="text-xs text-slate-400 mb-4">
                 Dumps all relational SQLite tables (Categories, Incomes, Expenses, Vehicles, FuelLogs,
-                Investments, Properties, SystemLogs) into a backup JSON file.
+                Investments, Properties, SavingsGoals, BudgetLimits, RecurringExpenses, PurchaseTasks, SystemLogs) into a backup JSON file.
               </p>
             </div>
             <div className="flex gap-2">
@@ -935,12 +952,134 @@ export const BackupRestoreManager: React.FC<BackupRestoreManagerProps> = ({
             </div>
 
             <button
-              onClick={handleResetToSeeds}
+              onClick={() => setShowResetModal(true)}
               className="w-full py-2 px-3 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 font-semibold rounded-lg text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
             >
               <RotateCcw className="w-3.5 h-3.5" />
               <span>Reset Master SQLite Database</span>
             </button>
+          </div>
+
+          {/* Clean Data for Deployment */}
+          <div className="bg-gradient-to-br from-emerald-950/30 to-slate-900 border border-emerald-500/30 rounded-xl p-5 flex flex-col justify-between md:col-span-2">
+            <div>
+              <div className="flex items-center gap-2 text-emerald-400 font-semibold text-sm mb-1">
+                <Sparkles className="w-4 h-4" />
+                <span>Clean All Temporary Data for Production Deployment</span>
+              </div>
+              <p className="text-xs text-slate-300 mb-2">
+                Prepares SAS-AEIT for fresh production deployment by permanently purging all temporary demo transactions (expenses, incomes, test logs, sample vehicles, and purchase tasks).
+              </p>
+              <p className="text-[11px] text-slate-400 mb-4">
+                ✓ Preserves all 30+ master categories and cascading subcategory structures. All sequential ID generators reset to 1.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end">
+              <button
+                onClick={() => setShowCleanDeploymentModal(true)}
+                className="py-2.5 px-4 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-emerald-500/20"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>Clean All Temporary Data for Deployment</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Clean Deployment Confirmation Modal */}
+      {showCleanDeploymentModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-emerald-500/40 rounded-3xl p-6 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-emerald-400" />
+                <span>Clean Database for Deployment</span>
+              </h3>
+              <button
+                onClick={() => setShowCleanDeploymentModal(false)}
+                className="text-slate-400 hover:text-white p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="py-4 space-y-3 text-xs text-slate-300">
+              <p className="font-semibold text-slate-100">
+                Are you ready to purge all temporary demo data and prepare this app for production?
+              </p>
+              <ul className="space-y-1.5 text-slate-400 pl-4 list-disc">
+                <li>Wipes sample incomes, expenses, and test mileage logs.</li>
+                <li>Wipes demo development repair tasks and future purchase planner test items.</li>
+                <li><strong className="text-emerald-400">Preserves</strong> complete master taxonomy (all income & expense categories + subcategories).</li>
+                <li>Resets all relational auto-increment sequences to 1.</li>
+              </ul>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setShowCleanDeploymentModal(false)}
+                className="px-4 py-2 rounded-xl text-xs text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleCleanDeployment}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-600 text-slate-950 transition-colors cursor-pointer"
+              >
+                Confirm Deployment Clean
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reset Confirmation Modal */}
+      {showResetModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-rose-400" />
+                <span>Confirm Master Reset</span>
+              </h3>
+              <button
+                onClick={() => setShowResetModal(false)}
+                className="text-slate-400 hover:text-white p-1"
+              >
+                <RotateCcw className="w-4 h-4 hidden" />
+                <span>✕</span>
+              </button>
+            </div>
+
+            <div className="py-4 space-y-2 text-xs text-slate-300">
+              <p>
+                Are you sure you want to restore the initial master categories and seed records?
+              </p>
+              <p className="text-slate-400">
+                This will reset your local database state to the pristine seed setup. All actions are logged into SQLite SystemLogs.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setShowResetModal(false)}
+                className="px-4 py-2 rounded-xl text-xs text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleResetToSeeds}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-500 hover:bg-rose-600 text-white transition-colors cursor-pointer"
+              >
+                Reset Database
+              </button>
+            </div>
           </div>
         </div>
       )}

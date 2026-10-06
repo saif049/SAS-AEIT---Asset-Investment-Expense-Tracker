@@ -52,6 +52,8 @@ import {
   FileSpreadsheet,
   CheckCircle2,
   LineChart,
+  Edit2,
+  Trash2,
 } from 'lucide-react';
 import { SpendingTrendChart } from './SpendingTrendChart';
 import {
@@ -62,6 +64,7 @@ import {
   Investment,
   Property,
   Category,
+  SubCategory,
   BudgetLimit,
   CategoryBudgetComparison,
 } from '../../types/database';
@@ -70,6 +73,8 @@ import {
   exportTransactionsToCSV,
   buildCSVTransactionRecords,
 } from '../../utils/csvExportService';
+import { EditTransactionModal, EditableTransaction } from '../../components/EditTransactionModal';
+import { sqliteService } from '../../database/sqliteService';
 
 interface DashboardViewProps {
   expenses: EnrichedExpense[];
@@ -79,10 +84,15 @@ interface DashboardViewProps {
   investments: Investment[];
   properties: Property[];
   categories?: Category[];
+  subcategories?: SubCategory[];
   budgetLimits?: BudgetLimit[];
   budgetComparisons?: CategoryBudgetComparison[];
   onSetBudgetLimit?: (categoryId: number, limitBdt: number, threshold?: number) => Promise<unknown>;
   onBatchSetBudgetLimits?: (limits: { category_id: number; monthly_limit_bdt: number }[]) => Promise<unknown>;
+  onUpdateExpense?: (id: number, updates: Parameters<typeof sqliteService.updateExpense>[1]) => Promise<unknown>;
+  onDeleteExpense?: (id: number) => Promise<unknown>;
+  onUpdateIncome?: (id: number, updates: Parameters<typeof sqliteService.updateIncome>[1]) => Promise<unknown>;
+  onDeleteIncome?: (id: number) => Promise<unknown>;
   onQuickAddExpense: () => void;
   onQuickAddIncome: () => void;
   onNavigateToSavingsGoals?: () => void;
@@ -96,10 +106,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   investments,
   properties,
   categories = [],
+  subcategories = [],
   budgetLimits = [],
   budgetComparisons = [],
   onSetBudgetLimit,
   onBatchSetBudgetLimits,
+  onUpdateExpense,
+  onDeleteExpense,
+  onUpdateIncome,
+  onDeleteIncome,
   onQuickAddExpense,
   onQuickAddIncome,
   onNavigateToSavingsGoals,
@@ -581,25 +596,25 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   // -------------------------------------------------------------------------
   // CARD D: Recent Transactions (Top 10 combined and sorted by date desc)
   // -------------------------------------------------------------------------
+  const [editingTx, setEditingTx] = useState<EditableTransaction | null>(null);
+  const [deletingTx, setDeletingTx] = useState<EditableTransaction | null>(null);
+  const [isDeletingTx, setIsDeletingTx] = useState(false);
+
   const recentTransactions = useMemo(() => {
-    const allTx: {
-      id: string;
-      date: string;
-      amount_bdt: number;
-      type: 'INCOME' | 'EXPENSE';
-      category: string;
-      subcategory: string;
-      tag: string;
-    }[] = [];
+    const allTx: EditableTransaction[] = [];
 
     expenses.forEach((e) => {
       allTx.push({
         id: `exp-${e.id}`,
+        rawId: e.id,
         date: e.date,
         amount_bdt: e.amount_bdt,
         type: 'EXPENSE',
         category: e.category_name || 'Expense',
         subcategory: e.subcategory_name || 'General',
+        category_id: e.category_id,
+        subcategory_id: e.subcategory_id,
+        remarks: e.remarks || null,
         tag: e.expense_type,
       });
     });
@@ -607,11 +622,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     incomes.forEach((i) => {
       allTx.push({
         id: `inc-${i.id}`,
+        rawId: i.id,
         date: i.date,
         amount_bdt: i.amount_bdt,
         type: 'INCOME',
         category: i.category_name || 'Income',
         subcategory: i.subcategory_name || 'General',
+        category_id: i.category_id,
+        subcategory_id: i.subcategory_id,
+        remarks: i.remarks || null,
         tag: i.source_type,
       });
     });
@@ -620,6 +639,31 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(0, 10);
   }, [expenses, incomes]);
+
+  const handleConfirmDelete = async () => {
+    if (!deletingTx) return;
+    try {
+      setIsDeletingTx(true);
+      if (deletingTx.type === 'EXPENSE') {
+        if (onDeleteExpense) {
+          await onDeleteExpense(deletingTx.rawId);
+        } else {
+          await sqliteService.deleteExpense(deletingTx.rawId);
+        }
+      } else {
+        if (onDeleteIncome) {
+          await onDeleteIncome(deletingTx.rawId);
+        } else {
+          await sqliteService.deleteIncome(deletingTx.rawId);
+        }
+      }
+      setDeletingTx(null);
+    } catch (err) {
+      console.error('Failed to delete transaction', err);
+    } finally {
+      setIsDeletingTx(false);
+    }
+  };
 
   // -------------------------------------------------------------------------
   // CARDS E, F, G: Interactive Drill-Down Pie Charts
@@ -2196,28 +2240,61 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <th className="py-2.5 px-3">Sub-Category</th>
                 <th className="py-2.5 px-3">Classification</th>
                 <th className="py-2.5 px-3 text-right">Amount (BDT)</th>
+                <th className="py-2.5 px-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800">
-              {recentTransactions.map((tx) => (
-                <tr key={tx.id} className="hover:bg-slate-800/40 transition-colors">
-                  <td className="py-3 px-3 font-mono text-slate-400">{tx.date}</td>
-                  <td className="py-3 px-3 text-slate-200 font-medium">{tx.category}</td>
-                  <td className="py-3 px-3 text-slate-400">{tx.subcategory}</td>
-                  <td className="py-3 px-3">
-                    <span className="text-[11px] font-mono text-slate-300 uppercase">
-                      {tx.tag}
-                    </span>
-                  </td>
-                  <td
-                    className={`py-3 px-3 text-right font-mono font-semibold tabular-nums ${
-                      tx.type === 'INCOME' ? 'text-emerald-400' : 'text-rose-400'
-                    }`}
-                  >
-                    {tx.type === 'INCOME' ? '+' : '-'} {formatBDT(tx.amount_bdt)}
+              {recentTransactions.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-10 text-center text-slate-500">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <Sparkles className="w-6 h-6 text-emerald-400 opacity-80" />
+                      <span className="font-semibold text-slate-300 text-sm">Clean Distribution State Active</span>
+                      <p className="text-xs text-slate-500 max-w-sm">
+                        All sample transactions removed. Record new direct entries to build your ledger with automated SQLite audit tracking.
+                      </p>
+                    </div>
                   </td>
                 </tr>
-              ))}
+              ) : (
+                recentTransactions.map((tx) => (
+                  <tr key={tx.id} className="hover:bg-slate-800/40 transition-colors">
+                    <td className="py-3 px-3 font-mono text-slate-400">{tx.date}</td>
+                    <td className="py-3 px-3 text-slate-200 font-medium">{tx.category}</td>
+                    <td className="py-3 px-3 text-slate-400">{tx.subcategory}</td>
+                    <td className="py-3 px-3">
+                      <span className="text-[11px] font-mono text-slate-300 uppercase">
+                        {tx.tag}
+                      </span>
+                    </td>
+                    <td
+                      className={`py-3 px-3 text-right font-mono font-semibold tabular-nums ${
+                        tx.type === 'INCOME' ? 'text-emerald-400' : 'text-rose-400'
+                      }`}
+                    >
+                      {tx.type === 'INCOME' ? '+' : '-'} {formatBDT(tx.amount_bdt)}
+                    </td>
+                    <td className="py-3 px-3 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => setEditingTx(tx)}
+                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer"
+                          title="Edit transaction (Audit Logged)"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => setDeletingTx(tx)}
+                          className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 transition-colors cursor-pointer"
+                          title="Delete transaction (Audit Logged)"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -2306,6 +2383,85 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
       </div>
+      {/* Transaction Edit Modal */}
+      {editingTx && (
+        <EditTransactionModal
+          isOpen={true}
+          onClose={() => setEditingTx(null)}
+          transaction={editingTx}
+          categories={categories}
+          subcategories={subcategories}
+          onSaved={() => {
+            setEditingTx(null);
+          }}
+        />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deletingTx && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-2xl bg-rose-500/20 text-rose-400 border border-rose-500/30">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Delete Transaction?</h3>
+                <p className="text-xs text-slate-400">
+                  This action will be permanently recorded in SQLite system audit logs.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 text-xs space-y-1">
+              <div className="flex justify-between">
+                <span className="text-slate-400">Record ID:</span>
+                <span className="font-mono text-slate-200 font-bold">{deletingTx.id}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Amount:</span>
+                <span className="font-mono text-rose-400 font-bold">{formatBDT(deletingTx.amount_bdt)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Category:</span>
+                <span className="text-slate-200">{deletingTx.category} ({deletingTx.subcategory})</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Date:</span>
+                <span className="font-mono text-slate-300">{deletingTx.date}</span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeletingTx(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={isDeletingTx}
+                className="px-5 py-2 rounded-xl text-xs font-bold uppercase tracking-wider bg-rose-500 hover:bg-rose-600 text-white flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+              >
+                {isDeletingTx ? (
+                  <>
+                    <div className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                    <span>Deleting & Logging...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>Confirm Delete</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

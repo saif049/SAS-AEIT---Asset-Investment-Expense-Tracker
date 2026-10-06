@@ -164,6 +164,29 @@ CREATE TABLE IF NOT EXISTS RecurringExpenses (
   FOREIGN KEY (expense_id) REFERENCES Expenses(id) ON DELETE SET NULL
 );
 
+-- 13. PurchaseTasks Table (Item to purchase, date, quantity No/Kg/Litre, remarks)
+CREATE TABLE IF NOT EXISTS PurchaseTasks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  item_name TEXT NOT NULL,
+  category_id INTEGER,
+  subcategory_id INTEGER,
+  target_date TEXT NOT NULL,
+  quantity REAL NOT NULL CHECK(quantity > 0),
+  unit TEXT NOT NULL CHECK(unit IN ('No', 'Kg', 'Litre')),
+  estimated_cost_bdt REAL,
+  actual_cost_bdt REAL,
+  priority TEXT NOT NULL CHECK(priority IN ('LOW', 'MEDIUM', 'HIGH', 'URGENT')),
+  status TEXT NOT NULL CHECK(status IN ('PENDING', 'PURCHASED', 'CANCELLED')),
+  remarks TEXT,
+  purchased_date TEXT,
+  linked_expense_id INTEGER,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (category_id) REFERENCES Categories(id) ON DELETE SET NULL,
+  FOREIGN KEY (subcategory_id) REFERENCES SubCategories(id) ON DELETE SET NULL,
+  FOREIGN KEY (linked_expense_id) REFERENCES Expenses(id) ON DELETE SET NULL
+);
+
 -- Performance & Audit Indexes
 CREATE INDEX IF NOT EXISTS idx_expenses_date ON Expenses(date);
 CREATE INDEX IF NOT EXISTS idx_expenses_category ON Expenses(category_id);
@@ -173,4 +196,6 @@ CREATE INDEX IF NOT EXISTS idx_system_logs_time ON SystemLogs(timestamp);
 CREATE INDEX IF NOT EXISTS idx_savings_goals_status ON SavingsGoals(status);
 CREATE INDEX IF NOT EXISTS idx_budget_limits_cat ON BudgetLimits(category_id);
 CREATE INDEX IF NOT EXISTS idx_recurring_expenses_active ON RecurringExpenses(is_active);
+CREATE INDEX IF NOT EXISTS idx_purchase_tasks_status ON PurchaseTasks(status);
+CREATE INDEX IF NOT EXISTS idx_purchase_tasks_date ON PurchaseTasks(target_date);
 `;
