@@ -28,6 +28,8 @@ export interface EditableTransaction {
   date: string;
   category_id: number;
   subcategory_id: number;
+  category?: string;
+  subcategory?: string;
   remarks: string | null;
   tag?: string;
 }

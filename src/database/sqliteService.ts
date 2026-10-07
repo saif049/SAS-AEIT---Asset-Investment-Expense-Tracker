@@ -575,6 +575,70 @@ class SQLiteDatabaseService {
     return limit ? enriched.slice(0, limit) : enriched;
   }
 
+  public async updateExpense(
+    id: number,
+    updates: Partial<Omit<Expense, 'id' | 'created_at'>>
+  ): Promise<Expense> {
+    await this.initDatabase();
+    const exp = this.state!.expenses.find((e) => e.id === id);
+    if (!exp) throw new Error('Expense not found');
+
+    if (updates.amount_bdt !== undefined) {
+      if (updates.amount_bdt <= 0) throw new Error('Expense amount must be greater than zero');
+      exp.amount_bdt = Number(updates.amount_bdt.toFixed(2));
+    }
+    if (updates.date !== undefined) exp.date = updates.date;
+    if (updates.category_id !== undefined) exp.category_id = updates.category_id;
+    if (updates.subcategory_id !== undefined) exp.subcategory_id = updates.subcategory_id;
+    if (updates.expense_type !== undefined) exp.expense_type = updates.expense_type;
+    if (updates.reference_id !== undefined) exp.reference_id = updates.reference_id;
+    if (updates.remarks !== undefined) exp.remarks = updates.remarks ? updates.remarks.trim() : null;
+
+    this.persist();
+
+    await this.logAuditEvent('EDIT', 'EXPENSE', id, {
+      updated_fields: Object.keys(updates),
+      amount_bdt: exp.amount_bdt,
+      category_id: exp.category_id,
+      subcategory_id: exp.subcategory_id,
+      date: exp.date,
+    });
+
+    return exp;
+  }
+
+  public async updateIncome(
+    id: number,
+    updates: Partial<Omit<Income, 'id' | 'created_at'>>
+  ): Promise<Income> {
+    await this.initDatabase();
+    const inc = this.state!.incomes.find((i) => i.id === id);
+    if (!inc) throw new Error('Income not found');
+
+    if (updates.amount_bdt !== undefined) {
+      if (updates.amount_bdt <= 0) throw new Error('Income amount must be greater than zero');
+      inc.amount_bdt = Number(updates.amount_bdt.toFixed(2));
+    }
+    if (updates.date !== undefined) inc.date = updates.date;
+    if (updates.category_id !== undefined) inc.category_id = updates.category_id;
+    if (updates.subcategory_id !== undefined) inc.subcategory_id = updates.subcategory_id;
+    if (updates.source_type !== undefined) inc.source_type = updates.source_type;
+    if (updates.source_id !== undefined) inc.source_id = updates.source_id;
+    if (updates.remarks !== undefined) inc.remarks = updates.remarks ? updates.remarks.trim() : null;
+
+    this.persist();
+
+    await this.logAuditEvent('EDIT', 'INCOME', id, {
+      updated_fields: Object.keys(updates),
+      amount_bdt: inc.amount_bdt,
+      category_id: inc.category_id,
+      subcategory_id: inc.subcategory_id,
+      date: inc.date,
+    });
+
+    return inc;
+  }
+
   public async deleteExpense(id: number): Promise<void> {
     await this.initDatabase();
     const idx = this.state!.expenses.findIndex((e) => e.id === id);

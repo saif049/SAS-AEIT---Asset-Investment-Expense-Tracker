@@ -56,6 +56,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { SpendingTrendChart } from './SpendingTrendChart';
+import { ExpenseCategoryPieChart } from './ExpenseCategoryPieChart';
 import {
   EnrichedExpense,
   EnrichedIncome,
@@ -707,11 +708,34 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   // Selected drill-down data
   const selectedDrillDown = useMemo(() => {
-    if (!selectedPieCategory) {
-      return pieCategoriesData[0] || null;
+    if (selectedPieCategory) {
+      // First check in pieCategoriesData
+      const foundInCurrent = pieCategoriesData.find((p) => p.name === selectedPieCategory);
+      if (foundInCurrent) return foundInCurrent;
+
+      // Otherwise compute subcategories directly from all expenses for this category
+      const matchingExps = expenses.filter((e) => (e.category_name || 'Others') === selectedPieCategory);
+      if (matchingExps.length > 0) {
+        const total = matchingExps.reduce((s, e) => s + e.amount_bdt, 0);
+        const subcategories: Record<string, number> = {};
+        matchingExps.forEach((e) => {
+          const s = e.subcategory_name || 'General';
+          subcategories[s] = (subcategories[s] || 0) + e.amount_bdt;
+        });
+        const allTotal = expenses.reduce((s, e) => s + e.amount_bdt, 0) || 1;
+        return {
+          name: selectedPieCategory,
+          total,
+          percentage: (total / allTotal) * 100,
+          startAngle: 0,
+          angle: 360,
+          color: '#10B981',
+          subcategories,
+        };
+      }
     }
-    return pieCategoriesData.find((p) => p.name === selectedPieCategory) || pieCategoriesData[0];
-  }, [pieCategoriesData, selectedPieCategory]);
+    return pieCategoriesData[0] || null;
+  }, [pieCategoriesData, selectedPieCategory, expenses]);
 
   // -------------------------------------------------------------------------
   // CARD H: Mileage Metrics
@@ -2056,94 +2080,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
 
       {/* ---------------------------------------------------- */}
-      {/* CARDS E, F, G: INTERACTIVE DRILL-DOWN PIE CHARTS */}
+      {/* CARDS E, F, G: RECHARTS PRIMARY CATEGORIES PIE CHART & DRILL-DOWN */}
       {/* ---------------------------------------------------- */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Ring Visualizer (Card E/F) */}
-        <div className="lg:col-span-6 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col justify-between">
-          <div className="pb-3 mb-4 border-b border-slate-800">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
-              <PieIcon className="w-4 h-4 text-emerald-400" />
-              Cards E, F, G · Interactive Drill-Down Pie Ring
-            </h3>
-            <p className="text-xs text-slate-500">
-              Tap any category slice to expand and inspect its cascading sub-categories.
-            </p>
-          </div>
-
-          {/* SVG Donut Ring with Central Aggregate Total */}
-          <div className="flex flex-col items-center justify-center my-4">
-            <div className="relative w-56 h-56 flex items-center justify-center">
-              <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
-                {pieCategoriesData.map((slice) => {
-                  const strokeDasharray = `${(slice.percentage * 2 * Math.PI * 38) / 100} ${
-                    2 * Math.PI * 38
-                  }`;
-                  const strokeDashoffset = `${
-                    (-((slice.startAngle / 360) * 100 * 2 * Math.PI * 38)) / 100
-                  }`;
-                  const isSelected = selectedPieCategory === slice.name;
-
-                  return (
-                    <circle
-                      key={slice.name}
-                      cx="50"
-                      cy="50"
-                      r="38"
-                      fill="transparent"
-                      stroke={slice.color}
-                      strokeWidth={isSelected ? '14' : '10'}
-                      strokeDasharray={strokeDasharray}
-                      strokeDashoffset={strokeDashoffset}
-                      className="cursor-pointer transition-all duration-300 hover:opacity-80"
-                      onClick={() => setSelectedPieCategory(slice.name)}
-                    />
-                  );
-                })}
-              </svg>
-
-              {/* Central Aggregate Total */}
-              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center p-2">
-                <span className="text-[10px] uppercase font-semibold text-slate-400">
-                  {selectedPieCategory || 'Total Outflow'}
-                </span>
-                <span className="text-base font-bold font-mono text-white tabular-nums">
-                  {formatBDTShort(
-                    selectedDrillDown ? selectedDrillDown.total : cardAMetrics.totalExpense
-                  )}
-                </span>
-                <span className="text-[10px] text-emerald-400 font-mono">
-                  {selectedDrillDown ? `${selectedDrillDown.percentage.toFixed(1)}%` : '100%'}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Category Clickable Legend */}
-          <div className="grid grid-cols-2 gap-2 pt-4 border-t border-slate-800">
-            {pieCategoriesData.slice(0, 6).map((cat) => (
-              <button
-                key={cat.name}
-                onClick={() => setSelectedPieCategory(cat.name)}
-                className={`flex items-center justify-between p-2 rounded-lg text-left text-xs transition-colors cursor-pointer ${
-                  selectedPieCategory === cat.name
-                    ? 'bg-slate-800 border border-slate-700'
-                    : 'hover:bg-slate-800/40'
-                }`}
-              >
-                <div className="flex items-center gap-2 truncate mr-1">
-                  <span
-                    className="w-2.5 h-2.5 rounded-full shrink-0"
-                    style={{ backgroundColor: cat.color }}
-                  />
-                  <span className="text-slate-200 truncate">{cat.name}</span>
-                </div>
-                <span className="font-mono text-slate-400 shrink-0 text-[11px]">
-                  {cat.percentage.toFixed(0)}%
-                </span>
-              </button>
-            ))}
-          </div>
+        {/* Recharts Primary Categories Pie / Donut Chart (Cards E/F) */}
+        <div className="lg:col-span-6 flex flex-col">
+          <ExpenseCategoryPieChart
+            expenses={expenses}
+            selectedCategory={selectedPieCategory}
+            onSelectCategory={setSelectedPieCategory}
+            className="h-full"
+          />
         </div>
 
         {/* Dynamic Drill-Down Inspector (Card G) */}
